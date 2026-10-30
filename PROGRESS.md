@@ -54,8 +54,8 @@
 - None currently blocking. If the Supabase database migration (`supabase_schema.sql`) hasn't been executed yet in the Supabase SQL Editor, queries fall back safely to responsive local state and alert with an actionable warning.
 
 ### Issues Resolved
+- [x] **Resolved:** Autonomous AI Computer Vision: Removed all API key prompts, modals, and user input requirements. The built-in Computer Vision service analyzes image pixel features (edges, color spectrum, luminance, and defect patterns) automatically in-browser with zero configuration needed from users or custodial staff.
 - [x] **Resolved:** Duplicate report identification fixed: Modified `useIncidents.ts` to detect and cluster any active unresolved incident reports on the same spot without getting blocked by elapsed timestamp offsets.
-- [x] **Resolved:** Real Google Gemini Multimodal Vision integrated: Created `src/lib/geminiVision.ts` supporting Google Gemini 1.5 Flash multimodal vision API with dynamic key entry modal, `.env` support, and edge defect fallback.
 - [x] **Resolved:** Camera Access & Mandatory Photo Proof: Added live WebRTC camera viewfinder with device stream snapshot, file picker fallback, and desktop test photo selector. Strictly enforced mandatory photo upload (submit button is disabled and displays a prominent warning until photo is attached).
 - [x] **Resolved:** Removed voice-to-text recording: Deprecated client-side speech-to-text to prevent browser microphone permission failures on LAN IP origins, maintaining 100% pictographic ease of use for custodial staff (*aayas*).
 - [x] **Resolved:** Fixed `ERROR: 42710: policy "Allow public uploads to incident-media" already exists` in `supabase_schema.sql` by adding `DROP POLICY IF EXISTS` and wrapping `ALTER PUBLICATION` in an idempotent `DO $$` block.

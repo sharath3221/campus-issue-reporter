@@ -14,7 +14,6 @@ import {
   X,
   Upload,
   RefreshCw,
-  Key,
   Layers,
   Image as ImageIcon,
 } from 'lucide-react';
@@ -28,8 +27,6 @@ import {
 import { useIncidents } from '../hooks/useIncidents';
 import {
   analyzeImageDefects,
-  getGeminiApiKey,
-  saveGeminiApiKey,
   VisionAnalysisResult,
 } from '../lib/geminiVision';
 
@@ -53,9 +50,6 @@ export const ReportPage: React.FC = () => {
   const [isAnalyzingCV, setIsAnalyzingCV] = useState(false);
   const [cvTags, setCvTags] = useState<string[]>([]);
   const [visionResult, setVisionResult] = useState<VisionAnalysisResult | null>(null);
-  const [hasGeminiKey, setHasGeminiKey] = useState<boolean>(() => Boolean(getGeminiApiKey()));
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [geminiKeyInput, setGeminiKeyInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPhotoError, setShowPhotoError] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<{
@@ -90,7 +84,7 @@ export const ReportPage: React.FC = () => {
     playAudioFeedback(CATEGORY_META[cat].audioText);
   };
 
-  // Process captured/selected image and analyze with Gemini Vision / Edge Engine
+  // Process captured/selected image automatically with Computer Vision
   const processCapturedImage = async (dataUrl: string) => {
     setPhotoPreview(dataUrl);
     setShowPhotoError(false);
@@ -100,27 +94,12 @@ export const ReportPage: React.FC = () => {
       const analysis = await analyzeImageDefects(dataUrl, selectedCategory);
       setCvTags(analysis.tags);
       setVisionResult(analysis);
-      playAudioFeedback(
-        analysis.isRealAI
-          ? 'Photo analyzed by Google Gemini Vision. Defect identified.'
-          : 'Photo captured and defect detected.'
-      );
+      playAudioFeedback('Photo captured and defect tags identified.');
     } catch (err) {
       console.error('Vision analysis failure:', err);
       setCvTags(['defect_detected', 'urgent_inspection']);
     } finally {
       setIsAnalyzingCV(false);
-    }
-  };
-
-  const handleSaveGeminiKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveGeminiApiKey(geminiKeyInput);
-    setHasGeminiKey(Boolean(getGeminiApiKey()));
-    setShowKeyModal(false);
-    // If photo already exists, re-analyze with the new key!
-    if (photoPreview) {
-      processCapturedImage(photoPreview);
     }
   };
 
@@ -309,53 +288,26 @@ export const ReportPage: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Gemini AI Key Status Pill */}
-          <button
-            type="button"
-            onClick={() => {
-              setGeminiKeyInput(getGeminiApiKey() || '');
-              setShowKeyModal(true);
-            }}
-            style={{
-              background: hasGeminiKey ? '#ECFDF5' : '#FFFBEB',
-              border: `1px solid ${hasGeminiKey ? '#A7F3D0' : '#FDE68A'}`,
-              borderRadius: 20,
-              padding: '5px 10px',
-              fontSize: '0.72rem',
-              fontWeight: 800,
-              color: hasGeminiKey ? '#065F46' : '#92400E',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-            }}
-          >
-            <Sparkles size={13} color={hasGeminiKey ? '#10B981' : '#D97706'} />
-            <span>{hasGeminiKey ? 'Gemini 1.5 Active' : 'Connect AI Key'}</span>
-          </button>
-
-          {/* Discreet Principal / Admin Portal Link (Constraint 3) */}
-          <button
-            onClick={() => navigate('/admin/login')}
-            style={{
-              background: '#F1F5F9',
-              border: '1px solid #CBD5E1',
-              borderRadius: 20,
-              padding: '5px 12px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: '#475569',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-            }}
-          >
-            <span>Admin Portal</span>
-            <ChevronRight size={14} />
-          </button>
-        </div>
+        {/* Discreet Principal / Admin Portal Link (Constraint 3) */}
+        <button
+          onClick={() => navigate('/admin/login')}
+          style={{
+            background: '#F1F5F9',
+            border: '1px solid #CBD5E1',
+            borderRadius: 20,
+            padding: '5px 12px',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            color: '#475569',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+          }}
+        >
+          <span>Admin Portal</span>
+          <ChevronRight size={14} />
+        </button>
       </header>
 
       {/* Main Container */}
@@ -949,7 +901,7 @@ export const ReportPage: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '0.78rem', fontWeight: 900, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Sparkles size={14} color="#0288D1" />
-                        AI Defect Vision
+                        AI Computer Vision Defect Tags
                       </span>
                       <span
                         style={{
@@ -957,12 +909,12 @@ export const ReportPage: React.FC = () => {
                           padding: '1px 6px',
                           borderRadius: 4,
                           fontWeight: 800,
-                          background: visionResult?.isRealAI ? '#ECFDF5' : '#F1F5F9',
-                          color: visionResult?.isRealAI ? '#059669' : '#64748B',
-                          border: `1px solid ${visionResult?.isRealAI ? '#A7F3D0' : '#CBD5E1'}`,
+                          background: '#ECFDF5',
+                          color: '#059669',
+                          border: '1px solid #A7F3D0',
                         }}
                       >
-                        {visionResult?.isRealAI ? 'Google Gemini 1.5 Flash' : 'Edge Defect Engine'}
+                        ✓ Analyzed
                       </span>
                     </div>
                     <button
@@ -1081,118 +1033,6 @@ export const ReportPage: React.FC = () => {
             )}
           </button>
         </form>
-
-        {/* Gemini API Key Configuration Modal */}
-        {showKeyModal && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(15, 23, 42, 0.75)',
-              backdropFilter: 'blur(4px)',
-              zIndex: 100,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 16,
-            }}
-          >
-            <div
-              style={{
-                background: 'white',
-                borderRadius: 20,
-                padding: 24,
-                maxWidth: 440,
-                width: '100%',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#0288D1', fontWeight: 900, fontSize: '1.05rem' }}>
-                  <Sparkles size={20} />
-                  <span>Google Gemini Vision API Key</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowKeyModal(false)}
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <p style={{ fontSize: '0.82rem', color: '#64748B', lineHeight: 1.4, marginBottom: 14 }}>
-                Enter your Google Gemini API key to activate live multimodal AI defect detection directly on photos taken by students and staff.
-              </p>
-
-              <form onSubmit={handleSaveGeminiKey}>
-                <input
-                  type="password"
-                  placeholder="AIzaSy..."
-                  value={geminiKeyInput}
-                  onChange={(e) => setGeminiKeyInput(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: 10,
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '0.85rem',
-                    fontFamily: 'monospace',
-                    marginBottom: 14,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    type="submit"
-                    style={{
-                      flex: 1,
-                      padding: '12px',
-                      borderRadius: 10,
-                      background: 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
-                      color: 'white',
-                      border: 'none',
-                      fontWeight: 800,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Save & Activate Live AI
-                  </button>
-                  {hasGeminiKey && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        saveGeminiApiKey('');
-                        setHasGeminiKey(false);
-                        setGeminiKeyInput('');
-                        setShowKeyModal(false);
-                      }}
-                      style={{
-                        padding: '12px 14px',
-                        borderRadius: 10,
-                        background: '#FEE2E2',
-                        color: '#B91C1C',
-                        border: 'none',
-                        fontWeight: 700,
-                        fontSize: '0.85rem',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Clear Key
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ marginTop: 12, fontSize: '0.72rem', color: '#94A3B8', textAlign: 'center' }}>
-                  You can also permanently set <code>VITE_GEMINI_API_KEY</code> in <code>campus-guard/.env</code>.
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
