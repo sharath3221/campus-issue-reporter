@@ -1,0 +1,1 @@
+/Users/sharath/Projects/bootcamp/campus-guard/ARCHITECTURE.md
