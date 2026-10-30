@@ -1,18 +1,22 @@
 # PROGRESS.md — CampusPulse
 
 > **Development Progress Tracker**  
-> *Last Updated:* 2026-10-30  
+> *Last Updated:* 2026-10-31  
 > *Build Status:* Verified Production Build Clean (`npm run build` passing with 0 errors)  
-> *Server Status:* Running strictly on localhost (`npx vite --port 5173` without `--host`)
+> *Server Status:* Running strictly on localhost (`npx vite --port 5173` without `--host`)  
+> *GitHub Sync:* Synchronized with `https://github.com/sharath3221/campus-issue-reporter.git` (branch `main`)  
 
 ---
 
 ## 1. Feature Implementation Status
 
 ### Completed & Verified Features
-- [x] **Supabase Authentication for Admin Portal:** Added Supabase Auth for Google Sign-In (`supabase.auth.signInWithOAuth`) and institutional passkey login (`supabase.auth.signInWithPassword`), with clean session persistence.
-- [x] **Spot QR Sticker Generator Studio:** Built interactive Admin QR Generator allowing administrators to generate printable QR stickers for any Building, Floor, Room, Zone, and Fixture; saves directly into the `campus_locations` Supabase database table; downloads high-resolution PNG placards and provides 1-tap physical printing.
+- [x] **Supabase Authentication for Admin Portal:** Google Sign-In (`supabase.auth.signInWithOAuth`) and institutional passkey sign-in (`supabase.auth.signInWithPassword`), with automatic session persistence.
+- [x] **Spot QR Sticker Generator Studio:** Built-in generator allowing administrators to create printable QR stickers for any Building, Floor, Room, Zone, and Fixture; saves directly into the `campus_locations` Supabase database table; downloads high-resolution PNG placards and provides 1-tap physical printing.
 - [x] **Campus Spots Directory:** Admin directory showing all active campus spots with search, floor filters, live placard preview, and direct public reporter test links.
+- [x] **Supabase Edge Function: `analyze-defect`:** Server-side Gemini 2.5 Flash Multimodal Vision AI proxy that keeps `GEMINI_API_KEY` hidden inside Supabase Secrets.
+- [x] **Supabase Edge Function: `dispatch-alert`:** Automated multi-channel work order dispatcher supporting Meta WhatsApp Cloud API, Twilio SMS, and cloud logging.
+- [x] **Direct Supabase Storage Upload Pipeline:** Camera defect photos and maintenance repair proof photos stream directly into the `incident-media` Supabase bucket with public CDN URLs attached to tickets and media logs.
 - [x] **Production Data & Demo Cleanup:** Completely stripped all demo quick logins, sample testing photo buttons, and spot simulation dropdowns from public `/report`, `/maintenance`, and `/admin/login` pages. Cleared hardcoded mock tickets to ensure only real tickets from Supabase or live submissions appear.
 - [x] **Strict Localhost Preference:** Adheres to user instruction to bind dev server strictly to `localhost` without `--host`.
 - [x] **Immediate Camera Hardware Release:** Complete camera track shutdown and `video.srcObject = null` clearing so camera green indicator light turns off instantly upon snapshot or closing.
@@ -22,85 +26,32 @@
 - [x] **Direct Executive Pipeline (Strict Constraint 1):** Removed all Class Representative (CR) triage, approval gates, and intermediate verifications.
 - [x] **Clean Public Reporter UI (Strict Constraint 2):** Public route `/report` stripped of all admin queues, staff directories, internal dashboards, and API key prompts.
 - [x] **Separate Secure Admin Portal (Strict Constraint 3):** Isolated `/admin/login` and `/admin/dashboard` strictly for Principal, Management, and Head Administrators.
-- [x] **Live Google Gemini 2.5 Flash Multimodal Vision API:** Fully integrated and verified live with multimodal image pixel defect analysis, returning real defect tags, severity scores, and diagnosis summaries automatically with zero user prompt.
+- [x] **Live Google Gemini 2.5 Flash Multimodal Vision API:** Fully integrated with multimodal image pixel defect analysis, returning real defect tags, severity scores, and diagnosis summaries automatically with zero user prompt.
 - [x] **Smart Duplicate Clustering (Fixed & Verified):** Clusters all active unresolved incident reports on the same spot, increments `duplicate_count` (+N badge), escalates AI severity, and updates Supabase.
 - [x] **Public Spot Status Progress Badge:** 3-step lifecycle tracker `[Report Submitted ➔ Technician Dispatched ➔ Issue Resolved]` with maintenance fixed photo proof display.
 - [x] **Live Spatial Campus Floor Map:** Interactive SVG floor map with floor selector (Floor 1, Floor 2, Floor 3) and color-coded status pins (🔴 Red, 🟡 Yellow, 🟢 Green).
 - [x] **PostgreSQL / Supabase Schema (`supabase_schema.sql`):** 5-table schema with Row-Level Security (RLS) policies, Realtime publication for tickets and campus locations, and seed data.
-- [x] **Live Supabase Database Connection Verified:** Verified live cloud queries on `fxpjftdtfsbsthucvdpm`: `campus_locations` (6 rows), `incident_tickets` (3 rows), `maintenance_staff` (4 rows) all return HTTP 200 OK.
-- [x] **Supabase Client SDK & Fallback:** `@supabase/supabase-js` integration in `src/lib/supabaseClient.ts` with hybrid offline fallback.
-- [x] **Supabase Credentials Configured:** `.env` updated with live project URL and anon public key.
-- [x] **Supabase MCP Server Configuration:** Configured in `~/.gemini/antigravity/mcp_config.json` (`project_ref=fxpjftdtfsbsthucvdpm`).
-- [x] **Supabase Agent Skills Installation:** Installed `supabase` and `supabase-postgres-best-practices` via `npx skills add supabase/agent-skills`.
-- [x] **Git Repository Initialization:** Initialized git repo at project root with comprehensive `.gitignore`.
+- [x] **Git Repository Synchronization:** Pushed to GitHub at `https://github.com/sharath3221/campus-issue-reporter.git` with `.env` protected in `.gitignore`.
 
-### Implemented but Untested in Live Cloud Environment
-- [ ] **Physical Device QR Scanning:** Spot metadata URL parsing verified in browser; physical printed QR stickers pending real-world field test.
+### Features Pending Real-World Hardware Verification
+- [ ] **Physical Device QR Scanning:** Spot metadata URL parsing verified in browser; physical printed QR stickers pending real-world adhesive testing.
+- [ ] **Live Twilio / WhatsApp Cloud API Provisioning:** Edge Function `dispatch-alert` implemented and tested with simulated dispatch; pending live Twilio or Meta WhatsApp business account secrets.
 
-### Features Currently Under Development
-- [ ] **Physical Camera Stream API (Native WebRTC):** Direct `navigator.mediaDevices.getUserMedia` video stream viewfinder alternative to file input.
-- [ ] **Live Supabase Storage Upload Pipeline:** Streaming captured images directly to the `incident-media` Supabase bucket when `VITE_SUPABASE_ANON_KEY` is supplied.
-
-### Pending Features & Enhancements
+### Future Enhancements
 - [ ] **Multi-Language Audio Prompts:** Toggle for regional audio speech feedback (Hindi, Marathi, Telugu, Tamil, Kannada) for diverse support staff.
 - [ ] **SLA Countdown Clocks on Admin Map:** Visual pulsing timers for $<15$m emergency bypass tickets.
 - [ ] **PDF Work Order Export:** Printable daily summary of resolved and open campus tickets for administration meetings.
-- [ ] **Push Notification Webhooks:** Browser push notifications or automated SMS gateway dispatch via Twilio / Fast2SMS.
 
 ---
 
 ## 2. Issues & Bug Tracking
 
 ### Known Bugs & Limitations
-- None currently blocking. If the Supabase database migration (`supabase_schema.sql`) hasn't been executed yet in the Supabase SQL Editor, queries fall back safely to responsive local state and alert with an actionable warning.
+- None currently blocking. All builds pass with 0 errors, camera hardware is cleanly released, Supabase RLS is configured for public intake, and Edge Functions have resilient fallbacks.
 
 ### Issues Resolved
-- [x] **Resolved:** Immediate Camera Hardware Release: Fixed camera track shutdown so the green indicator light turns off immediately upon taking a photo or closing/unmounting the camera viewfinder (stops tracks, disables track state, pauses video element, and clears `video.srcObject`).
+- [x] **Resolved:** Immediate Camera Hardware Release: Fixed camera track shutdown so the green indicator light turns off immediately upon taking a photo or closing/unmounting the camera viewfinder.
 - [x] **Resolved:** Dedicated Maintenance Staff Portal (`/maintenance`): Created separate mobile-first portal for technicians to view assigned work orders, compare Before vs After defect photos, and upload live Fixed Photo Proof.
-- [x] **Resolved:** Autonomous AI Computer Vision: Removed all API key prompts, modals, and user input requirements. The built-in Computer Vision service analyzes image pixel features (edges, color spectrum, luminance, and defect patterns) automatically in-browser with zero configuration needed from users or custodial staff.
-- [x] **Resolved:** Duplicate report identification fixed: Modified `useIncidents.ts` to detect and cluster any active unresolved incident reports on the same spot without getting blocked by elapsed timestamp offsets.
-- [x] **Resolved:** Camera Access & Mandatory Photo Proof: Added live WebRTC camera viewfinder with device stream snapshot, file picker fallback, and desktop test photo selector. Strictly enforced mandatory photo upload (submit button is disabled and displays a prominent warning until photo is attached).
-- [x] **Resolved:** Removed voice-to-text recording: Deprecated client-side speech-to-text to prevent browser microphone permission failures on LAN IP origins, maintaining 100% pictographic ease of use for custodial staff (*aayas*).
-- [x] **Resolved:** Fixed `ERROR: 42710: policy "Allow public uploads to incident-media" already exists` in `supabase_schema.sql` by adding `DROP POLICY IF EXISTS` and wrapping `ALTER PUBLICATION` in an idempotent `DO $$` block.
-- [x] **Resolved:** Supabase credentials `.env` configuration updated with active live project URL and anon key.
-- [x] **Resolved:** TypeScript build failure TS6133 caused by unused imports after prototype refactoring. Cleaned up obsolete components and adjusted `tsconfig.json`.
-- [x] **Resolved:** Missing `AlertTriangle` icon import in `TrackPage.tsx`.
-- [x] **Resolved:** Violation of Strict Constraints 1, 2, and 3 from earlier draft. Removed all CR layers, simplified public page to be 100% clean and visual, and created dedicated `/admin/login` portal.
-- [x] **Resolved:** Inability to run dev server across local network devices. Enabled `--host` on Vite dev server.
-
----
-
-## 3. Recently Modified Files
-
-| File | Timestamp | Purpose |
-| :--- | :--- | :--- |
-| `campus-guard/.env` | 2026-10-30 | Supabase credentials configured (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) |
-| `campus-guard/src/pages/ReportPage.tsx` | 2026-10-30 | Public Zero-Login Reporter with pictographic buttons, audio feedback, camera capture, and spot status badge |
-| `campus-guard/src/pages/AdminDashboardPage.tsx` | 2026-10-30 | Live Spatial Floor Map, AI-prioritized feed, WhatsApp dispatch modal, and Supabase status badge |
-| `campus-guard/src/pages/AdminLoginPage.tsx` | 2026-10-30 | Secure Role-Based Executive Login portal |
-| `campus-guard/src/hooks/useIncidents.ts` | 2026-10-30 | State management, AI urgency formula, duplicate clustering, Supabase sync |
-| `campus-guard/src/lib/supabaseClient.ts` | 2026-10-30 | Supabase JS client with hybrid fallback |
-| `campus-guard/src/types/index.ts` | 2026-10-30 | Domain types, Category meta, Status meta |
-| `campus-guard/src/data/mockData.ts` | 2026-10-30 | Campus locations, maintenance staff, admin users, seed tickets |
-| `campus-guard/supabase_schema.sql` | 2026-10-30 | PostgreSQL migration with RLS policies and Realtime publication |
-| `campus-guard/ARCHITECTURE.md` | 2026-10-30 | Full system architecture specification (v2.2.0) |
-| `.gitignore` | 2026-10-30 | Root and subproject git ignore protection for `.env` and `node_modules` |
-
----
-
-## 4. Testing & Build Status
-
-- **TypeScript Compilation:** Passed with zero errors (`tsc` exiting with code 0).
-- **Vite Production Build:** Passed (`vite build` completed in ~764ms, generating optimized ESM chunks in `dist/assets/`).
-- **HMR & Dev Server:** Actively running on port 5173 with `--host` enabled:
-  - Local: `http://localhost:5173/`
-  - Network: `http://172.16.23.19:5173/`
-
----
-
-## 5. Prioritized Next Steps
-
-1. **Run Database Migration in Supabase SQL Editor:** Paste and run [supabase_schema.sql](file:///Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql) in your [Supabase Dashboard SQL Editor](https://supabase.com/dashboard/project/fxpjftdtfsbsthucvdpm/sql).
-2. **Verify Live Realtime Sync:** Open `/report?loc=QR-BLD-A-FL1-WASH-02` on your phone and `/admin/dashboard` on your computer. Submit a report and watch it appear live on the spatial floor map!
-3. **Dispatch & Resolve Workflow:** Dispatch a technician via WhatsApp link, mark ticket resolved with photo proof, and verify the public badge updates live.
-
+- [x] **Resolved:** Autonomous AI Computer Vision: Built-in multimodal Gemini 2.5 Flash engine operates silently without user key prompts.
+- [x] **Resolved:** Demo Artifacts Purge: Stripped all simulation dropdowns, desktop mock photo buttons, and demo account cards.
+- [x] **Resolved:** Direct Supabase Storage Integration: Automated Blob conversion and streaming of captured camera photos to the `incident-media` bucket.
