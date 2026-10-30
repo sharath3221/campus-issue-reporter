@@ -68,10 +68,10 @@ git status
 
 ---
 
-## 5. Unfinished Work & Blockers
-- **Supabase Cloud Anon Key:** `VITE_SUPABASE_ANON_KEY` in `campus-guard/.env` currently has placeholder text. The user needs to retrieve their public anon key from the Supabase Dashboard (`fxpjftdtfsbsthucvdpm`) and paste it in `.env`.
-- **Run Migration in Supabase SQL Editor:** The script `supabase_schema.sql` needs to be pasted into the Supabase SQL editor to provision the remote database tables and RLS policies.
-- Note: There are **NO BLOCKERS** for application execution. The application operates in resilient hybrid mode if cloud credentials are unset.
+## 5. Unfinished Work & Next Immediate Actions
+- **Run Migration in Supabase SQL Editor:** The script `supabase_schema.sql` can be pasted into the [Supabase SQL Editor](https://supabase.com/dashboard/project/fxpjftdtfsbsthucvdpm/sql) to provision the remote database tables, seed locations & staff, and enable Realtime publications.
+- **Verify Live Cloud Realtime Connection:** Once the tables exist, opening `/admin/dashboard` connects via WebSocket and switches the header badge to `🟢 Supabase Realtime`.
+- Note: There are **NO BLOCKERS** for application execution. The application operates in resilient hybrid mode if cloud tables are not yet initialized.
 
 ---
 
@@ -89,8 +89,8 @@ git status
 
 **Project:** CampusPulse — Zero-Login AI Campus Facility & Incident Reporting System  
 **Current Status:** Production-ready web prototype running on Vite 6 with React 18, TypeScript, and Supabase integration. Build is completely green.  
-**Last Completed Task:** Initialized persistent project memory files (`PROJECT_CONTEXT.md`, `PROGRESS.md`, `AI_HANDOVER.md`) and set up Git repository structure.  
-**Current Unfinished Task:** Awaiting user insertion of `VITE_SUPABASE_ANON_KEY` in `campus-guard/.env` and migration execution in the Supabase SQL Editor.  
+**Last Completed Task:** Added user Supabase credentials to `.env`, verified clean build, and launched Vite dev server with `--host`.  
+**Current Unfinished Task:** Run `supabase_schema.sql` in Supabase SQL Editor and test real-time incident flow between mobile phone and admin portal.  
 **Relevant Files:**  
 - [`/Users/sharath/Projects/bootcamp/campus-guard/.env`](file:///Users/sharath/Projects/bootcamp/campus-guard/.env) (Environment variables)  
 - [`/Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql`](file:///Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql) (Database migration)  
@@ -99,7 +99,8 @@ git status
 - [`/Users/sharath/Projects/bootcamp/campus-guard/src/pages/ReportPage.tsx`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/pages/ReportPage.tsx) (Public Reporter)  
 - [`/Users/sharath/Projects/bootcamp/campus-guard/src/pages/AdminDashboardPage.tsx`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/pages/AdminDashboardPage.tsx) (Admin Dashboard)  
 
-**Next Action:** Check if the user has added their `VITE_SUPABASE_ANON_KEY` or test multi-language audio toggles for the pictographic buttons.  
-**Expected Result:** When real Supabase keys are active, tickets created on `/report` immediately write to Supabase table `incident_tickets` and trigger a live Realtime push update on `/admin/dashboard`.  
+**Next Action:** Verify database tables in Supabase SQL Editor, test live reporting on `/report`, and verify realtime sync on `/admin/dashboard`.  
+**Expected Result:** When real Supabase keys are active and schema is applied, tickets created on `/report` immediately write to Supabase table `incident_tickets` and trigger a live Realtime push update on `/admin/dashboard`.  
 **Verification:** Run `npm run build` in `campus-guard/` and test `/report` in browser or mobile phone on local network `http://172.16.23.19:5173/report`.  
 **Important Warnings:** Never commit `.env` or sensitive API keys. Keep the public `/report` page free of administrative clutter per Strict Constraint 2.
+

@@ -27,12 +27,13 @@
 - [x] **Resolution Action with Fixed Photo Proof:** Admin modal to attach repair photo proof which immediately updates the public spot badge.
 - [x] **PostgreSQL / Supabase Schema (`supabase_schema.sql`):** 5-table schema with Row-Level Security (RLS) policies, Realtime publication, and seed data.
 - [x] **Supabase Client SDK & Fallback:** `@supabase/supabase-js` integration in `src/lib/supabaseClient.ts` with hybrid offline fallback.
+- [x] **Supabase Credentials Configured:** `.env` updated with live project URL and anon public key.
 - [x] **Supabase MCP Server Configuration:** Configured in `~/.gemini/antigravity/mcp_config.json` (`project_ref=fxpjftdtfsbsthucvdpm`).
 - [x] **Supabase Agent Skills Installation:** Installed `supabase` and `supabase-postgres-best-practices` via `npx skills add supabase/agent-skills`.
 - [x] **Git Repository Initialization:** Initialized git repo at project root with comprehensive `.gitignore`.
 
 ### Implemented but Untested in Live Cloud Environment
-- [ ] **Live Supabase Database Connection:** `VITE_SUPABASE_URL` is set to `https://fxpjftdtfsbsthucvdpm.supabase.co` in `.env`, but `VITE_SUPABASE_ANON_KEY` awaits user insertion from Supabase Dashboard. (Hybrid local cache currently operates cleanly).
+- [ ] **Database Migration Execution in Supabase:** `supabase_schema.sql` ready to be executed in Supabase SQL Editor to populate tables and enable realtime publication.
 - [ ] **Physical Device QR Scanning:** Spot metadata URL parsing verified in browser; physical printed QR stickers pending real-world field test.
 
 ### Features Currently Under Development
@@ -50,9 +51,10 @@
 ## 2. Issues & Bug Tracking
 
 ### Known Bugs & Limitations
-- **Supabase Anon Key Pending:** The application shows `Supabase Ready (Hybrid Mode)` until the user inputs their `VITE_SUPABASE_ANON_KEY` in `campus-guard/.env`. *Mitigation:* Hybrid local cache handles all ticket operations seamlessly with zero runtime errors.
+- None currently blocking. If the Supabase database migration (`supabase_schema.sql`) hasn't been executed yet in the Supabase SQL Editor, queries fall back safely to responsive local state and alert with an actionable warning.
 
 ### Issues Resolved
+- [x] **Resolved:** Supabase credentials `.env` configuration updated with active live project URL and anon key.
 - [x] **Resolved:** TypeScript build failure TS6133 caused by unused imports after prototype refactoring. Cleaned up obsolete components and adjusted `tsconfig.json`.
 - [x] **Resolved:** Missing `AlertTriangle` icon import in `TrackPage.tsx`.
 - [x] **Resolved:** Violation of Strict Constraints 1, 2, and 3 from earlier draft. Removed all CR layers, simplified public page to be 100% clean and visual, and created dedicated `/admin/login` portal.
@@ -64,6 +66,7 @@
 
 | File | Timestamp | Purpose |
 | :--- | :--- | :--- |
+| `campus-guard/.env` | 2026-10-30 | Supabase credentials configured (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) |
 | `campus-guard/src/pages/ReportPage.tsx` | 2026-10-30 | Public Zero-Login Reporter with pictographic buttons, audio feedback, camera capture, and spot status badge |
 | `campus-guard/src/pages/AdminDashboardPage.tsx` | 2026-10-30 | Live Spatial Floor Map, AI-prioritized feed, WhatsApp dispatch modal, and Supabase status badge |
 | `campus-guard/src/pages/AdminLoginPage.tsx` | 2026-10-30 | Secure Role-Based Executive Login portal |
@@ -72,7 +75,6 @@
 | `campus-guard/src/types/index.ts` | 2026-10-30 | Domain types, Category meta, Status meta |
 | `campus-guard/src/data/mockData.ts` | 2026-10-30 | Campus locations, maintenance staff, admin users, seed tickets |
 | `campus-guard/supabase_schema.sql` | 2026-10-30 | PostgreSQL migration with RLS policies and Realtime publication |
-| `campus-guard/.env` / `.env.example` | 2026-10-30 | Supabase environment variable configuration |
 | `campus-guard/ARCHITECTURE.md` | 2026-10-30 | Full system architecture specification (v2.2.0) |
 | `.gitignore` | 2026-10-30 | Root and subproject git ignore protection for `.env` and `node_modules` |
 
@@ -81,7 +83,7 @@
 ## 4. Testing & Build Status
 
 - **TypeScript Compilation:** Passed with zero errors (`tsc` exiting with code 0).
-- **Vite Production Build:** Passed (`vite build` completed in ~776ms, generating optimized ESM chunks in `dist/assets/`).
+- **Vite Production Build:** Passed (`vite build` completed in ~764ms, generating optimized ESM chunks in `dist/assets/`).
 - **HMR & Dev Server:** Actively running on port 5173 with `--host` enabled:
   - Local: `http://localhost:5173/`
   - Network: `http://172.16.23.19:5173/`
@@ -90,7 +92,7 @@
 
 ## 5. Prioritized Next Steps
 
-1. **User Action:** Add `VITE_SUPABASE_ANON_KEY` to `/Users/sharath/Projects/bootcamp/campus-guard/.env` from the Supabase Dashboard and run `supabase_schema.sql` in the Supabase SQL editor.
-2. **Verify Live Realtime Sync:** Test creating an incident on `/report` on a smartphone and observe the instantaneous pin appearance on `/admin/dashboard` via Supabase Realtime.
-3. **Regional Audio Prompts:** Expand Web Speech API voice synthesis to support Hindi, Marathi, and regional language toggles.
-4. **Git Commit & Push:** Commit initialized project files and documentation to Git repository.
+1. **Run Database Migration in Supabase SQL Editor:** Paste and run [supabase_schema.sql](file:///Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql) in your [Supabase Dashboard SQL Editor](https://supabase.com/dashboard/project/fxpjftdtfsbsthucvdpm/sql).
+2. **Verify Live Realtime Sync:** Open `/report?loc=QR-BLD-A-FL1-WASH-02` on your phone and `/admin/dashboard` on your computer. Submit a report and watch it appear live on the spatial floor map!
+3. **Dispatch & Resolve Workflow:** Dispatch a technician via WhatsApp link, mark ticket resolved with photo proof, and verify the public badge updates live.
+
