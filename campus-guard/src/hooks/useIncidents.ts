@@ -461,6 +461,21 @@ export function useIncidents() {
           .then(({ error }) => {
             if (error) console.warn('Supabase ticket insert notice:', error);
           });
+
+        // Also record media attachment if photo is provided
+        if (newTicket.user_photo_url) {
+          supabase
+            .from('incident_media')
+            .insert({
+              ticket_id: newTicket.ticket_id,
+              media_type: 'USER_PHOTO',
+              file_url: newTicket.user_photo_url,
+              ai_vision_tags: newTicket.ai_vision_tags,
+            })
+            .then(({ error }) => {
+              if (error) console.warn('Supabase media insert notice:', error);
+            });
+        }
       }
 
       return { ticket: newTicket, isDuplicate: false };
@@ -537,6 +552,20 @@ export function useIncidents() {
         .then(({ error }) => {
           if (error) console.warn('Supabase resolve update notice:', error);
         });
+
+      if (finalPhoto) {
+        supabase
+          .from('incident_media')
+          .insert({
+            ticket_id: ticketId,
+            media_type: 'FIXED_PHOTO',
+            file_url: finalPhoto,
+            ai_vision_tags: ['repair_verified'],
+          })
+          .then(({ error }) => {
+            if (error) console.warn('Supabase fixed media insert notice:', error);
+          });
+      }
     }
   }, []);
 

@@ -29,6 +29,7 @@ import {
   analyzeImageDefects,
   VisionAnalysisResult,
 } from '../lib/geminiVision';
+import { uploadIncidentMedia } from '../lib/supabaseClient';
 
 export const ReportPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -221,8 +222,8 @@ export const ReportPage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Submit Report (Enforce Mandatory Photo)
-  const handleSubmit = (e: React.FormEvent) => {
+  // Submit Report (Enforce Mandatory Photo & Upload to Supabase Storage)
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!photoPreview) {
@@ -233,22 +234,34 @@ export const ReportPage: React.FC = () => {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
+      // 1. Upload photo to Supabase 'incident-media' storage bucket
+      let publicStorageUrl: string | null = null;
+      try {
+        publicStorageUrl = await uploadIncidentMedia(photoPreview, `${currentSpot.location_id}.jpg`);
+      } catch (uploadErr) {
+        console.warn('Storage bucket upload notice:', uploadErr);
+      }
+
+      // 2. Submit report
       const result = submitReport({
         locationId: currentSpot.location_id,
         category: selectedCategory,
-        userPhotoUrl: photoPreview,
+        userPhotoUrl: publicStorageUrl || photoPreview,
         aiVisionTags: cvTags,
       });
 
       setSubmittedResult(result);
-      setIsSubmitting(false);
       playAudioFeedback(
         result.isDuplicate
           ? 'Duplicate report recorded! Priority score upgraded.'
           : 'Report submitted successfully to campus administration.'
       );
-    }, 1000);
+    } catch (err) {
+      console.error('Submission failure:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

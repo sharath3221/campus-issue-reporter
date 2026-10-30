@@ -27,6 +27,7 @@ import {
   StaffSpecialization,
 } from '../types';
 import { useIncidents } from '../hooks/useIncidents';
+import { uploadIncidentMedia } from '../lib/supabaseClient';
 
 export const MaintenancePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -200,16 +201,25 @@ export const MaintenancePage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Submit Resolution & Fixed Photo Proof
-  const handleSubmitResolution = (e: React.FormEvent) => {
+  // Submit Resolution & Fixed Photo Proof (Upload to Supabase Storage)
+  const handleSubmitResolution = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resolvingTicket || !fixedPhotoPreview) return;
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      resolveTicket(resolvingTicket.ticket_id, fixedPhotoPreview);
-      setIsSubmitting(false);
+    try {
+      let publicStorageUrl: string | null = null;
+      try {
+        publicStorageUrl = await uploadIncidentMedia(
+          fixedPhotoPreview,
+          `fixed_${resolvingTicket.ticket_id}.jpg`
+        );
+      } catch (uploadErr) {
+        console.warn('Storage upload notice:', uploadErr);
+      }
+
+      resolveTicket(resolvingTicket.ticket_id, publicStorageUrl || fixedPhotoPreview);
       setResolveSuccess(resolvingTicket.ticket_id);
       playAudioFeedback('Work order marked resolved. Fixed proof published.');
 
@@ -220,7 +230,11 @@ export const MaintenancePage: React.FC = () => {
         setResolveSuccess(null);
         setActiveTab('RESOLVED');
       }, 1500);
-    }, 800);
+    } catch (err) {
+      console.error('Resolution submission error:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Filtered Tickets
