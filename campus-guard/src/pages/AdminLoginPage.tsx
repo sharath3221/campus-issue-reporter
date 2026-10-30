@@ -28,11 +28,11 @@ export const AdminLoginPage: React.FC = () => {
     checkExistingSession();
   }, [navigate]);
 
-  // Email / Password / Passkey Form Submit using Supabase Auth
+  // Email / Password Form Submit using Supabase Auth
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Please enter both your institutional email and secret passkey.');
+      setError('Please enter both your institutional email and password.');
       return;
     }
 
@@ -184,7 +184,7 @@ export const AdminLoginPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', gap: 12 }}>
           <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
           <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
-            Or with Passkey
+            Or with Email & Password
           </span>
           <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
         </div>
@@ -223,7 +223,7 @@ export const AdminLoginPage: React.FC = () => {
               <Mail size={18} color="#94A3B8" style={{ position: 'absolute', left: 12, top: 12 }} />
               <input
                 type="email"
-                placeholder="principal@campuspulse.edu"
+                placeholder="admin@college.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 style={{
@@ -240,10 +240,10 @@ export const AdminLoginPage: React.FC = () => {
 
           <div>
             <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: 6 }}>
-              Secret Passkey
+              Administrator Password
             </label>
             <div style={{ position: 'relative' }}>
-              <KeyRound size={18} color="#94A3B8" style={{ position: 'absolute', left: 12, top: 12 }} />
+              <Lock size={18} color="#94A3B8" style={{ position: 'absolute', left: 12, top: 12 }} />
               <input
                 type="password"
                 placeholder="••••••••••••"

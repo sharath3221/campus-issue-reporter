@@ -62,7 +62,7 @@ Legacy campus reporting portals demand mandatory student credentials, causing hi
 ### Backend & Cloud Layer (Supabase)
 - **Project Ref:** `fxpjftdtfsbsthucvdpm` (`https://fxpjftdtfsbsthucvdpm.supabase.co`)
 - **Database:** PostgreSQL 15+ with Row-Level Security (RLS) policies allowing anonymous public inserts and admin controls.
-- **Authentication:** Supabase Auth for Google OAuth and institutional passkey sign-in.
+- **Authentication:** Supabase Auth for Google OAuth and institutional password sign-in (strict authentication; no demo accounts or bypasses).
 - **Storage:** Public S3-compatible bucket `incident-media` for camera defect photos and maintenance repair proof photos.
 - **Realtime:** Supabase Realtime WebSocket replication for live updates across `incident_tickets` and `campus_locations`.
 - **Edge Functions (`supabase/functions/`):**
@@ -77,7 +77,7 @@ Legacy campus reporting portals demand mandatory student credentials, causing hi
 | :--- | :--- | :--- |
 | `/report` | Public Zero-Login Incident Intake | Public (No login) |
 | `/maintenance` | Dedicated Maintenance Staff Portal (Before/After photos) | Technicians / Public link from WhatsApp |
-| `/admin/login` | Secure Executive Admin Login (Google SSO & Passkey) | Administrators |
+| `/admin/login` | Secure Executive Admin Login (Google SSO & Supabase Password) | Administrators |
 | `/admin/dashboard` | Executive Command Center (Map, Feed, QR Studio) | Authenticated Admin Session |
 
 ---

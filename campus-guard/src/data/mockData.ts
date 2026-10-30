@@ -111,28 +111,6 @@ export const maintenanceStaff: MaintenanceStaff[] = [
   },
 ];
 
-export const adminUsers: AdminUser[] = [
-  {
-    admin_id: 'admin-001',
-    email: 'principal@campuspulse.edu',
-    role: 'PRINCIPAL',
-    full_name: 'Dr. Anand Sharma',
-    department: "Principal's Directorate",
-  },
-  {
-    admin_id: 'admin-002',
-    email: 'trustee@campuspulse.edu',
-    role: 'MANAGEMENT',
-    full_name: 'Rajiv Mehta',
-    department: 'Governing Council / Management',
-  },
-  {
-    admin_id: 'admin-003',
-    email: 'facilities@campuspulse.edu',
-    role: 'ADMIN',
-    full_name: 'Sunil Verma',
-    department: 'Campus Facilities Operations Head',
-  },
-];
+export const adminUsers: AdminUser[] = [];
 
 export const initialIncidentTickets: IncidentTicket[] = [];

@@ -29,62 +29,41 @@ export async function signInWithGoogleSupabase(): Promise<void> {
 }
 
 /**
- * Authenticates an administrator via Supabase Email/Password or Secret Passkey
+ * Authenticates an administrator strictly via Supabase Auth
+ * No demo bypass or direct login fallbacks allowed.
  */
 export async function signInWithSupabasePassword(
   email: string,
-  passkey: string,
-  role: AdminRole
+  password: string,
+  role: AdminRole = 'ADMIN'
 ): Promise<AdminUser> {
   const cleanEmail = email.trim().toLowerCase();
 
-  // 1. Attempt Supabase Auth signInWithPassword if configured
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: passkey,
-      });
-
-      if (!error && data?.user) {
-        const user: AdminUser = {
-          admin_id: data.user.id,
-          email: data.user.email || cleanEmail,
-          role: role,
-          full_name:
-            data.user.user_metadata?.full_name ||
-            (role === 'PRINCIPAL'
-              ? 'College Principal'
-              : role === 'MANAGEMENT'
-              ? 'Governing Trustee'
-              : 'Operations Head'),
-          department:
-            role === 'PRINCIPAL'
-              ? "Principal's Office"
-              : role === 'MANAGEMENT'
-              ? 'Governing Council'
-              : 'Facilities Management',
-        };
-        localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(user));
-        return user;
-      }
-    } catch (err) {
-      console.warn('Supabase password auth fallback triggered:', err);
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase is not configured. Please verify your connection settings in .env.');
   }
 
-  // 2. Institutional Passkey Authentication
-  // Ensures authorized administrators can access the system with their institution passkey
-  const adminUser: AdminUser = {
-    admin_id: 'admin-' + Math.random().toString(36).substring(2, 9),
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: cleanEmail,
+    password: password,
+  });
+
+  if (error || !data?.user) {
+    throw new Error(error?.message || 'Invalid administrator credentials. Account not found or password incorrect.');
+  }
+
+  const user: AdminUser = {
+    admin_id: data.user.id,
+    email: data.user.email || cleanEmail,
     role: role,
     full_name:
-      role === 'PRINCIPAL'
+      data.user.user_metadata?.full_name ||
+      data.user.user_metadata?.name ||
+      (role === 'PRINCIPAL'
         ? 'College Principal'
         : role === 'MANAGEMENT'
         ? 'Governing Trustee'
-        : 'Operations Head',
+        : 'Operations Head'),
     department:
       role === 'PRINCIPAL'
         ? "Principal's Office"
@@ -93,25 +72,16 @@ export async function signInWithSupabasePassword(
         : 'Facilities Management',
   };
 
-  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(adminUser));
-  return adminUser;
+  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(user));
+  return user;
 }
 
 /**
- * Checks for an active Supabase Auth session or stored admin session
+ * Checks for an active Supabase Auth session
+ * Strictly rejects any unauthenticated or demo sessions.
  */
 export async function getActiveAdminSession(): Promise<AdminUser | null> {
-  // Check localStorage first
-  try {
-    const raw = localStorage.getItem(ADMIN_SESSION_KEY);
-    if (raw) {
-      return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('Error reading admin session from localStorage:', e);
-  }
-
-  // If no local storage session, check Supabase Auth session (e.g. after Google OAuth redirect)
+  // 1. Verify live Supabase Auth session
   if (isSupabaseConfigured && supabase) {
     try {
       const { data } = await supabase.auth.getSession();
@@ -119,7 +89,7 @@ export async function getActiveAdminSession(): Promise<AdminUser | null> {
         const user = data.session.user;
         const adminSession: AdminUser = {
           admin_id: user.id,
-          email: user.email || 'admin@campuspulse.edu',
+          email: user.email || 'admin@college.edu',
           role: 'PRINCIPAL',
           full_name:
             user.user_metadata?.full_name ||
@@ -130,17 +100,25 @@ export async function getActiveAdminSession(): Promise<AdminUser | null> {
         };
         localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(adminSession));
         return adminSession;
+      } else {
+        // No live Supabase session found -> immediately purge local cache
+        localStorage.removeItem(ADMIN_SESSION_KEY);
+        return null;
       }
     } catch (err) {
-      console.warn('Error fetching Supabase session:', err);
+      console.warn('Error verifying Supabase session:', err);
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      return null;
     }
   }
 
+  // Supabase not configured or no active session
+  localStorage.removeItem(ADMIN_SESSION_KEY);
   return null;
 }
 
 /**
- * Signs out of Supabase Auth and clears the admin session
+ * Signs out of Supabase Auth and removes all stored admin sessions
  */
 export async function signOutAdmin(): Promise<void> {
   try {
@@ -148,9 +126,8 @@ export async function signOutAdmin(): Promise<void> {
       await supabase.auth.signOut();
     }
   } catch (err) {
-    console.warn('Supabase sign out error:', err);
+    console.warn('Supabase sign out notice:', err);
   } finally {
     localStorage.removeItem(ADMIN_SESSION_KEY);
   }
 }
-

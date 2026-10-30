@@ -51,11 +51,16 @@ export const AdminDashboardPage: React.FC = () => {
   // Navigation tab
   const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'QR_STUDIO'>('OPERATIONS');
 
-  // Admin Session Check (Strict Constraint 3)
+  // Admin Session Check (Strict Constraint 3 - Strictly Authenticated Sessions Only)
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
     try {
       const sess = localStorage.getItem(ADMIN_SESSION_KEY);
-      if (sess) return JSON.parse(sess);
+      if (sess) {
+        const parsed = JSON.parse(sess);
+        if (parsed?.admin_id && !parsed.admin_id.startsWith('admin-')) {
+          return parsed;
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -980,7 +985,7 @@ export const AdminDashboardPage: React.FC = () => {
             <form onSubmit={handleConfirmResolve} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: 6 }}>
-                  Fixed Proof Photo URL or Demo Image:
+                  Fixed Proof Photo URL:
                 </label>
                 <input
                   type="text"

@@ -11,7 +11,9 @@
 ## 1. Feature Implementation Status
 
 ### Completed & Verified Features
-- [x] **Supabase Authentication for Admin Portal:** Google Sign-In (`supabase.auth.signInWithOAuth`) and institutional passkey sign-in (`supabase.auth.signInWithPassword`), with automatic session persistence.
+- [x] **Strict Authentication Enforced & Demo Admin Eliminated:** Completely eliminated demo admin accounts (`admin-001`, `admin-002`, `admin-003`), hardcoded `mockData.ts` admin array, sample SQL admin seeds, fake passkey generator bypasses, and unverified session fallbacks. The Admin Portal (`/admin/*`) now strictly validates live Supabase Auth credentials via Google OAuth or Supabase Auth email/password.
+- [x] **Vercel Production Deployment Configuration:** Configured root `package.json` build scripts and SPA rewrites (`vercel.json`) for seamless zero-config Vercel Git-linked deployments.
+- [x] **Supabase Authentication for Admin Portal:** Google Sign-In (`supabase.auth.signInWithOAuth`) and institutional password sign-in (`supabase.auth.signInWithPassword`), with live Supabase session persistence.
 - [x] **Spot QR Sticker Generator Studio:** Built-in generator allowing administrators to create printable QR stickers for any Building, Floor, Room, Zone, and Fixture; saves directly into the `campus_locations` Supabase database table; downloads high-resolution PNG placards and provides 1-tap physical printing.
 - [x] **Campus Spots Directory:** Admin directory showing all active campus spots with search, floor filters, live placard preview, and direct public reporter test links.
 - [x] **Supabase Edge Function: `analyze-defect`:** Server-side Gemini 2.5 Flash Multimodal Vision AI proxy that keeps `GEMINI_API_KEY` hidden inside Supabase Secrets.
