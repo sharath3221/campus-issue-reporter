@@ -157,9 +157,23 @@ CREATE POLICY "Admins view admin accounts"
 -- 5. Supabase Realtime Replication
 -- ==============================================================================
 
--- Enable Realtime events for live dispatch updates on Admin Map & Public Spot Badge
-ALTER PUBLICATION supabase_realtime ADD TABLE incident_tickets;
-ALTER PUBLICATION supabase_realtime ADD TABLE incident_media;
+-- Enable Realtime events for live dispatch updates on Admin Map & Public Spot Badge (Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'incident_tickets'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE incident_tickets;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'incident_media'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE incident_media;
+    END IF;
+END $$;
 
 -- ==============================================================================
 -- 6. Supabase Storage Buckets
@@ -170,12 +184,14 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('incident-media', 'incident-media', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Storage RLS: Public read and write for camera uploads
+-- Storage RLS: Public read and write for camera uploads (Idempotent)
+DROP POLICY IF EXISTS "Allow public uploads to incident-media" ON storage.objects;
 CREATE POLICY "Allow public uploads to incident-media"
     ON storage.objects FOR INSERT
     TO anon, authenticated
     WITH CHECK (bucket_id = 'incident-media');
 
+DROP POLICY IF EXISTS "Allow public reads from incident-media" ON storage.objects;
 CREATE POLICY "Allow public reads from incident-media"
     ON storage.objects FOR SELECT
     TO anon, authenticated

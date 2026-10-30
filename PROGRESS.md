@@ -54,6 +54,7 @@
 - None currently blocking. If the Supabase database migration (`supabase_schema.sql`) hasn't been executed yet in the Supabase SQL Editor, queries fall back safely to responsive local state and alert with an actionable warning.
 
 ### Issues Resolved
+- [x] **Resolved:** Fixed `ERROR: 42710: policy "Allow public uploads to incident-media" already exists` in `supabase_schema.sql` by adding `DROP POLICY IF EXISTS` and wrapping `ALTER PUBLICATION` in an idempotent `DO $$` block.
 - [x] **Resolved:** Supabase credentials `.env` configuration updated with active live project URL and anon key.
 - [x] **Resolved:** TypeScript build failure TS6133 caused by unused imports after prototype refactoring. Cleaned up obsolete components and adjusted `tsconfig.json`.
 - [x] **Resolved:** Missing `AlertTriangle` icon import in `TrackPage.tsx`.
