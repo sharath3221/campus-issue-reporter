@@ -1,24 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, ArrowRight, KeyRound, AlertCircle } from 'lucide-react';
+import { Shield, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, UserPlus, LogIn, HelpCircle } from 'lucide-react';
 import { AdminRole, AdminUser } from '../types';
 import {
   signInWithGoogleSupabase,
   signInWithSupabasePassword,
+  signUpWithSupabase,
   getActiveAdminSession,
 } from '../lib/supabaseAuth';
 
 export const AdminLoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<'SIGN_IN' | 'REGISTER'>('SIGN_IN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<AdminRole>('PRINCIPAL');
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfigTip, setShowConfigTip] = useState(false);
 
   // Check if session already exists or returning from Supabase OAuth
   useEffect(() => {
+    // Check for OAuth error in URL hash or query params
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const queryParams = new URLSearchParams(window.location.search);
+    const oauthError =
+      hashParams.get('error_description') ||
+      queryParams.get('error_description') ||
+      hashParams.get('error') ||
+      queryParams.get('error');
+
+    if (oauthError) {
+      setError(`OAuth Notice (400): ${decodeURIComponent(oauthError)}`);
+    }
+
     async function checkExistingSession() {
       const session = await getActiveAdminSession();
       if (session) {
@@ -29,22 +46,52 @@ export const AdminLoginPage: React.FC = () => {
   }, [navigate]);
 
   // Email / Password Form Submit using Supabase Auth
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please enter both your institutional email and password.');
       return;
     }
 
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
     setError('');
+    setSuccessMsg('');
     setIsSubmitting(true);
 
     try {
-      await signInWithSupabasePassword(email, password, role);
-      navigate('/admin/dashboard');
+      if (mode === 'SIGN_IN') {
+        await signInWithSupabasePassword(email, password, role);
+        navigate('/admin/dashboard');
+      } else {
+        const res = await signUpWithSupabase(email, password, role);
+        if (res.user) {
+          navigate('/admin/dashboard');
+        } else {
+          setSuccessMsg(
+            res.message ||
+              'Admin account registered! If email confirmation is required by your Supabase project, please check your inbox.'
+          );
+          setMode('SIGN_IN');
+        }
+      }
     } catch (err: any) {
       console.warn('Auth Error:', err);
-      setError(err.message || 'Authentication failed. Please verify credentials.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        setError(
+          'Invalid credentials (400). If you have not created this account yet, click "Create Admin Account" above.'
+        );
+      } else if (msg.toLowerCase().includes('email not confirmed')) {
+        setError(
+          'Email not confirmed (400). Please check your email inbox to verify, or disable "Confirm email" in Supabase Dashboard (Auth ➔ Providers ➔ Email).'
+        );
+      } else {
+        setError(msg || 'Authentication failed. Please verify credentials.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -53,6 +100,7 @@ export const AdminLoginPage: React.FC = () => {
   // Google Sign-In with Supabase Authentication
   const handleGoogleLogin = async () => {
     setError('');
+    setSuccessMsg('');
     setIsGoogleLoading(true);
 
     try {
@@ -60,7 +108,12 @@ export const AdminLoginPage: React.FC = () => {
       // Supabase OAuth redirects to Google login page and returns to /admin/dashboard
     } catch (err: any) {
       console.warn('Supabase Google Auth Error:', err);
-      setError(err.message || 'Google Sign-In failed or domain is not authorized in Supabase Auth.');
+      const msg = err.message || '';
+      setError(
+        msg ||
+          'Google Sign-In failed (400). Ensure the redirect URI is registered in Google Cloud Console.'
+      );
+      setShowConfigTip(true);
       setIsGoogleLoading(false);
     }
   };
@@ -79,7 +132,7 @@ export const AdminLoginPage: React.FC = () => {
       <div
         style={{
           width: '100%',
-          maxWidth: 440,
+          maxWidth: 460,
           background: 'white',
           borderRadius: 24,
           padding: '36px 30px',
@@ -87,7 +140,7 @@ export const AdminLoginPage: React.FC = () => {
         }}
       >
         {/* Brand */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div
             style={{
               width: 52,
@@ -105,13 +158,104 @@ export const AdminLoginPage: React.FC = () => {
             <Shield size={28} />
           </div>
 
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontSize: '1.45rem', fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em' }}>
             CampusPulse Admin Portal
           </h1>
-          <p style={{ fontSize: '0.825rem', color: '#64748B', marginTop: 4 }}>
-            Strict Authentication for Principal, Management & Administrative Officers (Constraint 3)
+          <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: 4 }}>
+            Authenticated Principal & Management Command Center (Constraint 3)
           </p>
         </div>
+
+        {/* Mode Switcher Tabs */}
+        <div
+          style={{
+            display: 'flex',
+            background: '#F1F5F9',
+            borderRadius: 12,
+            padding: 4,
+            marginBottom: 20,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setMode('SIGN_IN');
+              setError('');
+              setSuccessMsg('');
+            }}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: 'none',
+              background: mode === 'SIGN_IN' ? 'white' : 'transparent',
+              color: mode === 'SIGN_IN' ? '#0F172A' : '#64748B',
+              fontWeight: 800,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              boxShadow: mode === 'SIGN_IN' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <LogIn size={15} />
+            <span>Sign In</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('REGISTER');
+              setError('');
+              setSuccessMsg('');
+            }}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: 'none',
+              background: mode === 'REGISTER' ? 'white' : 'transparent',
+              color: mode === 'REGISTER' ? '#0F172A' : '#64748B',
+              fontWeight: 800,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              boxShadow: mode === 'REGISTER' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <UserPlus size={15} />
+            <span>Create Admin Account</span>
+          </button>
+        </div>
+
+        {/* Success Alert */}
+        {successMsg && (
+          <div
+            style={{
+              background: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              borderRadius: 10,
+              padding: '10px 14px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              color: '#16A34A',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              lineHeight: 1.4,
+            }}
+          >
+            <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>{successMsg}</span>
+          </div>
+        )}
 
         {/* Error Alert */}
         {error && (
@@ -123,14 +267,15 @@ export const AdminLoginPage: React.FC = () => {
               padding: '10px 14px',
               marginBottom: 16,
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               gap: 8,
               color: '#DC2626',
               fontSize: '0.8rem',
               fontWeight: 700,
+              lineHeight: 1.4,
             }}
           >
-            <AlertCircle size={16} />
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
             <span>{error}</span>
           </div>
         )}
@@ -177,20 +322,20 @@ export const AdminLoginPage: React.FC = () => {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>{isGoogleLoading ? 'Connecting to Google with Supabase...' : 'Sign in with Google'}</span>
+          <span>{isGoogleLoading ? 'Connecting to Google...' : 'Sign in with Google'}</span>
         </button>
 
         {/* Clean Divider */}
         <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', gap: 12 }}>
           <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
           <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
-            Or with Email & Password
+            {mode === 'SIGN_IN' ? 'Or with Email & Password' : 'Or Register with Email'}
           </span>
           <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Login / Register Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: 6 }}>
               Administrative Role
@@ -240,7 +385,7 @@ export const AdminLoginPage: React.FC = () => {
 
           <div>
             <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: 6 }}>
-              Administrator Password
+              {mode === 'SIGN_IN' ? 'Administrator Password' : 'Create Password (min. 6 chars)'}
             </label>
             <div style={{ position: 'relative' }}>
               <Lock size={18} color="#94A3B8" style={{ position: 'absolute', left: 12, top: 12 }} />
@@ -281,13 +426,76 @@ export const AdminLoginPage: React.FC = () => {
               marginTop: 6,
             }}
           >
-            <span>{isSubmitting ? 'Authenticating...' : 'Authorize & Access Dashboard'}</span>
+            <span>
+              {isSubmitting
+                ? 'Processing...'
+                : mode === 'SIGN_IN'
+                ? 'Authorize & Access Dashboard'
+                : 'Create Real Supabase Admin'}
+            </span>
             <ArrowRight size={18} />
           </button>
         </form>
 
+        {/* OAuth 400 Quick Helper */}
+        <div style={{ marginTop: 20 }}>
+          <button
+            type="button"
+            onClick={() => setShowConfigTip(!showConfigTip)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#64748B',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              margin: '0 auto',
+            }}
+          >
+            <HelpCircle size={14} />
+            <span>Seeing a 400 redirect_uri error with Google?</span>
+          </button>
+
+          {showConfigTip && (
+            <div
+              style={{
+                marginTop: 10,
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: 10,
+                padding: '10px 12px',
+                fontSize: '0.75rem',
+                color: '#475569',
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+                Fix Google 400 redirect_uri_mismatch:
+              </div>
+              <div>In Google Cloud Console ➔ APIs & Services ➔ Credentials:</div>
+              <div>Add this exact URL to <b>Authorized redirect URIs</b>:</div>
+              <code
+                style={{
+                  display: 'block',
+                  background: '#EDF2F7',
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  margin: '4px 0',
+                  color: '#0288D1',
+                  wordBreak: 'break-all',
+                }}
+              >
+                https://fxpjftdtfsbsthucvdpm.supabase.co/auth/v1/callback
+              </code>
+            </div>
+          )}
+        </div>
+
         {/* Navigation Links */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
           <button
             onClick={() => navigate('/report')}
             style={{

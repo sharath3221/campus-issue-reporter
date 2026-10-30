@@ -77,6 +77,61 @@ export async function signInWithSupabasePassword(
 }
 
 /**
+ * Registers a new administrator directly in Supabase Auth.
+ */
+export async function signUpWithSupabase(
+  email: string,
+  password: string,
+  role: AdminRole = 'ADMIN'
+): Promise<{ user: AdminUser | null; message?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase is not configured. Please verify your connection settings in .env.');
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email: cleanEmail,
+    password: password,
+    options: {
+      data: {
+        role: role,
+        full_name:
+          role === 'PRINCIPAL'
+            ? 'College Principal'
+            : role === 'MANAGEMENT'
+            ? 'Governing Trustee'
+            : 'Operations Head',
+      },
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (data?.session?.user) {
+    const adminUser: AdminUser = {
+      admin_id: data.session.user.id,
+      email: data.session.user.email || cleanEmail,
+      role: role,
+      full_name:
+        data.session.user.user_metadata?.full_name ||
+        (role === 'PRINCIPAL' ? 'College Principal' : role === 'MANAGEMENT' ? 'Governing Trustee' : 'Operations Head'),
+      department:
+        role === 'PRINCIPAL' ? "Principal's Office" : role === 'MANAGEMENT' ? 'Governing Council' : 'Facilities Management',
+    };
+    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(adminUser));
+    return { user: adminUser };
+  }
+
+  return {
+    user: null,
+    message: 'Admin account created in Supabase! If email confirmation is enabled, please verify your email before logging in.',
+  };
+}
+
+/**
  * Checks for an active Supabase Auth session
  * Strictly rejects any unauthenticated or demo sessions.
  */
