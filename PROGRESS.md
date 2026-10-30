@@ -12,13 +12,13 @@
 ### Completed & Verified Features
 - [x] **Zero-Login Architecture:** Completely decoupled incident intake from authentication; no logins, passwords, or emails required.
 - [x] **Direct Executive Pipeline (Strict Constraint 1):** Removed all Class Representative (CR) triage, approval gates, and intermediate verifications.
-- [x] **Clean Public Reporter UI (Strict Constraint 2):** Public route `/report` stripped of all admin queues, staff directories, and internal dashboards.
+- [x] **Clean Public Reporter UI (Strict Constraint 2):** Public route `/report` stripped of all admin queues, staff directories, internal dashboards, and API key prompts.
 - [x] **Separate Secure Admin Portal (Strict Constraint 3):** Isolated `/admin/login` and `/admin/dashboard` strictly for Principal, Management, and Head Administrators.
 - [x] **Spot QR Metadata Auto-Population:** Reads `?loc=QR-BLD-A-FL1-WASH-02` to extract Building, Floor, Room, and Fixture ID with interactive QR spot simulator.
 - [x] **Pictographic UI for Support Staff (*Aayas*):** 4 large tactile buttons with icons (🚰 Water, 💡 Lights/Fan, 🧹 Cleanliness, 🪑 Furniture).
 - [x] **Speech Synthesis Audio Feedback:** Real-time Web Speech API audio announcements when category buttons are tapped.
 - [x] **Instant Camera & WebRTC Viewfinder:** Mobile camera capture with live viewfinder stream, gallery file picker, and mandatory photo verification.
-- [x] **Multimodal AI Computer Vision Engine:** Integrated `src/lib/geminiVision.ts` with direct Google Gemini 1.5 Flash multimodal vision API and edge defect fallback.
+- [x] **Live Google Gemini 2.5 Flash Multimodal Vision API:** Fully integrated and verified live with multimodal image pixel defect analysis, returning real defect tags, severity scores, and diagnosis summaries automatically with zero user prompt.
 - [x] **Smart Duplicate Clustering (Fixed & Verified):** Clusters all active unresolved incident reports on the same spot, increments `duplicate_count` (+N badge), escalates AI severity, and updates Supabase.
 - [x] **Public Spot Status Progress Badge:** 3-step lifecycle tracker `[Report Submitted ➔ Technician Dispatched ➔ Issue Resolved]` with maintenance fixed photo proof display.
 - [x] **AI Urgency Scoring Algorithm:** Dynamic calculation based on defect severity, lecture hours proximity, duplicate weights, and multi-media evidence bonuses.

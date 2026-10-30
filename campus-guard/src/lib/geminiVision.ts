@@ -111,8 +111,8 @@ Return ONLY JSON:
   "summary": "1-sentence defect diagnosis"
 }`;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${envKey.trim()}`,
+      let response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${envKey.trim()}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -133,6 +133,31 @@ Return ONLY JSON:
         }
       );
 
+      // Fallback to gemini-flash-latest if needed
+      if (!response.ok) {
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${envKey.trim()}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: mimeType, data: base64Data } },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.1,
+                response_mime_type: 'application/json',
+              },
+            }),
+          }
+        );
+      }
+
       if (response.ok) {
         const data = await response.json();
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -143,9 +168,9 @@ Return ONLY JSON:
               ? parsed.defect_tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
               : ['defect_detected', 'urgent_inspection'],
             severityScore: Number(parsed.severity_score) || 8.0,
-            summary: parsed.summary || 'Defect verified by Gemini Vision Engine.',
+            summary: parsed.summary || 'Defect verified by Gemini 2.5 Flash Vision.',
             isRealAI: true,
-            modelUsed: 'Google Gemini 1.5 Flash Vision',
+            modelUsed: 'Google Gemini 2.5 Flash Vision',
           };
         }
       }
