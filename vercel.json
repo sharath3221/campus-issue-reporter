@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd campus-guard && npm install && npm run build",
+  "outputDirectory": "campus-guard/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "campus-pulse-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zero-Login AI Campus Facility & Incident Reporting System",
+  "scripts": {
+    "build": "cd campus-guard && npm install && npm run build",
+    "dev": "cd campus-guard && npm run dev",
+    "preview": "cd campus-guard && npm run preview"
+  }
+}
