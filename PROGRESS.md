@@ -22,7 +22,7 @@
 - [x] **Supabase Edge Function: `dispatch-alert`:** Automated multi-channel work order dispatcher supporting Meta WhatsApp Cloud API, Twilio SMS, and cloud logging.
 - [x] **Direct Supabase Storage Upload Pipeline:** Camera defect photos and maintenance repair proof photos stream directly into the `incident-media` Supabase bucket with public CDN URLs attached to tickets and media logs.
 - [x] **Production Data & Demo Cleanup:** Completely stripped all demo quick logins, sample testing photo buttons, and spot simulation dropdowns from public `/report`, `/maintenance`, and `/admin/login` pages. Cleared hardcoded mock tickets to ensure only real tickets from Supabase or live submissions appear.
-- [x] **Strict Localhost Preference:** Adheres to user instruction to bind dev server strictly to `localhost` without `--host`.
+- [x] **Multi-Device & Mobile Network Access:** Configured Vite network host mode (`server: { host: true, port: 5173 }`) enabling smartphones and tablets on the local Wi-Fi to test and scan QR codes in addition to desktop localhost.
 - [x] **Immediate Camera Hardware Release:** Complete camera track shutdown and `video.srcObject = null` clearing so camera green indicator light turns off instantly upon snapshot or closing.
 - [x] **Dedicated Maintenance Staff Portal (`/maintenance`):** Separate mobile-first portal for technicians (plumbers, electricians, janitors, carpenters) to view work orders, compare Before vs After photos, and snap live camera Fixed Photo Proof.
 - [x] **WhatsApp Deep-Link Work Order Resolution:** WhatsApp dispatch links automatically include `https://.../maintenance?ticket=...` for 1-tap mobile completion by technicians.
