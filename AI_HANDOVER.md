@@ -8,22 +8,33 @@
 ---
 
 ## 1. Current Project Status
-- The project **CampusPulse** is fully functional, compiling cleanly, and actively running via a daemon Vite development server on port 5173 with `--host` network access.
-- Strict Constraints 1, 2, and 3 have been completely implemented:
-  - **No CR Layer:** Reports bypass all intermediary student verification and flow directly from user submission to the AI engine and into the Admin Portal.
-  - **Clean User Reporter (`/report`):** 100% clean, visual, pictographic, audio-enabled for support staff (*aayas*), spot QR metadata auto-read, and 3-step spot status progress badge with fixed photo proof.
-  - **Separate Admin Portal (`/admin/login` & `/admin/dashboard`):** Role-based executive login, live 2D multi-floor spatial map (Floors 1, 2, 3) with color-coded pins, duplicate counter badges, and one-click WhatsApp/SMS maintenance dispatch.
-- **Supabase Cloud Layer:** Fully prepared with `@supabase/supabase-js`, `supabase_schema.sql` (RLS policies + Realtime), `supabaseClient.ts` with hybrid fallback, Supabase MCP Server (`project_ref=fxpjftdtfsbsthucvdpm`), and installed Supabase Agent Skills.
+- The project **CampusPulse** is 100% production-ready, compiling cleanly with 0 errors via `npm run build`, and running on `localhost` (port 5173).
+- **Authentication:** Supabase Auth is integrated for both Google Sign-In (`supabase.auth.signInWithOAuth`) and institutional passkey login (`supabase.auth.signInWithPassword`), with automatic fallback and session persistence.
+- **Admin Spot QR Generator Studio:** Interactive generator embedded in `/admin/dashboard` allowing administrators to create printable QR stickers for any campus building, floor, room, and fixture, saves directly to the `campus_locations` Supabase database table, downloads high-res PNG placards, and offers 1-tap physical printing.
+- **Campus Spots Directory:** Realtime table of all registered campus spots with search, floor filters, placard preview, and public report test links.
+- **Production Cleanup:** All demo shortcuts, mock quick logins, simulation selectors, and desktop sample links have been completely removed.
+- **Hardware Cleanup:** Immediate camera track shutdown and `video.srcObject = null` clearing ensures the webcam green indicator light turns off immediately upon photo capture or close.
+- **AI Computer Vision:** Autonomous Google Gemini 2.5 Flash multimodal vision engine parses captured images and returns structured defect tags and urgency scores automatically.
+- **Dedicated Maintenance Staff Portal:** Mobile-first `/maintenance` page for technicians to inspect jobs, view Before defect photos, and upload live After repair proof photos.
 
 ---
 
 ## 2. Summary of Latest Development Session
-1. **Transformed Prototype into CampusPulse:** Rebranded and re-architected the app to enforce the direct User -> AI -> Executive Admin pipeline (Strict Constraint 1).
-2. **Rebuilt Public Interface (`ReportPage.tsx`):** Created pictographic cards for 4 categories (🚰 Water, 💡 Lights/Fan, 🧹 Cleanliness, 🪑 Furniture) with Web Speech API audio announcements for *aayas*, camera capture with Computer Vision tags, 5-second voice note with speech waveform visualizer, and public spot status progress badge.
-3. **Rebuilt Executive Admin Portal (`AdminLoginPage.tsx` & `AdminDashboardPage.tsx`):** Created secure role-based login for Principal/Management/Admin, multi-floor spatial GIS map with 🔴/🟡/🟢 pins, AI-prioritized queue with `+N` duplicate clustering counter, and one-click WhatsApp work order dispatch.
-4. **Authored PostgreSQL / Supabase Schema:** Generated `supabase_schema.sql` containing all 5 tables (`campus_locations`, `incident_tickets`, `incident_media`, `admin_users`, `maintenance_staff`), Row-Level Security policies allowing zero-login public inserts, and realtime publications.
-5. **Configured Supabase Client & MCP:** Installed `@supabase/supabase-js`, configured `src/lib/supabaseClient.ts` with local cache fallback, added Supabase MCP server to `~/.gemini/antigravity/mcp_config.json`, and installed official Supabase agent skills via `npx skills add supabase/agent-skills`.
-6. **Initialized Project Memory System:** Created `PROJECT_CONTEXT.md`, `PROGRESS.md`, `AI_HANDOVER.md`, and root `.gitignore`.
+1. **Integrated Supabase Auth:** Built `src/lib/supabaseAuth.ts` supporting Google OAuth sign-in and passkey auth with Supabase. Updated `AdminLoginPage.tsx` and removed external Firebase dependencies.
+2. **Built Admin QR Spot Generator (`QRSpotGenerator.tsx`):**
+   - Configurable parameters: Building Name, Floor Number, Room / Area, Zone Category, Fixture ID.
+   - Encodes `${origin}/report?loc=${locationId}` into high-contrast QR code (`qrcode` library).
+   - Printable 600x780 placard with CampusPulse crest, spot details, and scan instructions.
+   - Direct persistence to Supabase `campus_locations` via `addCampusLocation`.
+   - Download PNG and Print Sticker actions.
+   - Campus Spots Directory listing all active spots.
+3. **Integrated Tabs in Admin Dashboard:** Added sub-navigation switching between "Live Operations & Spatial Map" and "Spot QR Sticker Generator & Directory".
+4. **Purged All Demo / Testing Artifacts:**
+   - Cleared `initialIncidentTickets = []` in `mockData.ts`.
+   - Removed "Simulate another Spot QR" dropdown from `ReportPage.tsx`.
+   - Removed desktop sample photo buttons from `ReportPage.tsx` and `MaintenancePage.tsx`.
+5. **Database Migration Schema Updated (`supabase_schema.sql`):** Added RLS policies for `campus_locations` INSERT/UPDATE and added table to `supabase_realtime` publication.
+6. **Production Build Verified:** `npm run build` passes with 0 TypeScript/Vite errors.
 
 ---
 

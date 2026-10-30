@@ -2,32 +2,31 @@
 
 > **Development Progress Tracker**  
 > *Last Updated:* 2026-10-30  
-> *Build Status:* Verified Production Build Clean (`npm run build` passing in <1s)  
-> *Server Status:* Running (`vite --host` on port 5173)
+> *Build Status:* Verified Production Build Clean (`npm run build` passing with 0 errors)  
+> *Server Status:* Running strictly on localhost (`npx vite --port 5173` without `--host`)
 
 ---
 
 ## 1. Feature Implementation Status
 
 ### Completed & Verified Features
+- [x] **Supabase Authentication for Admin Portal:** Added Supabase Auth for Google Sign-In (`supabase.auth.signInWithOAuth`) and institutional passkey login (`supabase.auth.signInWithPassword`), with clean session persistence.
+- [x] **Spot QR Sticker Generator Studio:** Built interactive Admin QR Generator allowing administrators to generate printable QR stickers for any Building, Floor, Room, Zone, and Fixture; saves directly into the `campus_locations` Supabase database table; downloads high-resolution PNG placards and provides 1-tap physical printing.
+- [x] **Campus Spots Directory:** Admin directory showing all active campus spots with search, floor filters, live placard preview, and direct public reporter test links.
+- [x] **Production Data & Demo Cleanup:** Completely stripped all demo quick logins, sample testing photo buttons, and spot simulation dropdowns from public `/report`, `/maintenance`, and `/admin/login` pages. Cleared hardcoded mock tickets to ensure only real tickets from Supabase or live submissions appear.
+- [x] **Strict Localhost Preference:** Adheres to user instruction to bind dev server strictly to `localhost` without `--host`.
+- [x] **Immediate Camera Hardware Release:** Complete camera track shutdown and `video.srcObject = null` clearing so camera green indicator light turns off instantly upon snapshot or closing.
 - [x] **Dedicated Maintenance Staff Portal (`/maintenance`):** Separate mobile-first portal for technicians (plumbers, electricians, janitors, carpenters) to view work orders, compare Before vs After photos, and snap live camera Fixed Photo Proof.
 - [x] **WhatsApp Deep-Link Work Order Resolution:** WhatsApp dispatch links automatically include `https://.../maintenance?ticket=...` for 1-tap mobile completion by technicians.
 - [x] **Zero-Login Architecture:** Completely decoupled incident intake from authentication; no logins, passwords, or emails required.
 - [x] **Direct Executive Pipeline (Strict Constraint 1):** Removed all Class Representative (CR) triage, approval gates, and intermediate verifications.
 - [x] **Clean Public Reporter UI (Strict Constraint 2):** Public route `/report` stripped of all admin queues, staff directories, internal dashboards, and API key prompts.
 - [x] **Separate Secure Admin Portal (Strict Constraint 3):** Isolated `/admin/login` and `/admin/dashboard` strictly for Principal, Management, and Head Administrators.
-- [x] **Spot QR Metadata Auto-Population:** Reads `?loc=QR-BLD-A-FL1-WASH-02` to extract Building, Floor, Room, and Fixture ID with interactive QR spot simulator.
-- [x] **Pictographic UI for Support Staff (*Aayas*):** 4 large tactile buttons with icons (🚰 Water, 💡 Lights/Fan, 🧹 Cleanliness, 🪑 Furniture).
-- [x] **Speech Synthesis Audio Feedback:** Real-time Web Speech API audio announcements when category buttons are tapped.
-- [x] **Instant Camera & WebRTC Viewfinder:** Mobile camera capture with live viewfinder stream, gallery file picker, and mandatory photo verification.
 - [x] **Live Google Gemini 2.5 Flash Multimodal Vision API:** Fully integrated and verified live with multimodal image pixel defect analysis, returning real defect tags, severity scores, and diagnosis summaries automatically with zero user prompt.
 - [x] **Smart Duplicate Clustering (Fixed & Verified):** Clusters all active unresolved incident reports on the same spot, increments `duplicate_count` (+N badge), escalates AI severity, and updates Supabase.
 - [x] **Public Spot Status Progress Badge:** 3-step lifecycle tracker `[Report Submitted ➔ Technician Dispatched ➔ Issue Resolved]` with maintenance fixed photo proof display.
-- [x] **AI Urgency Scoring Algorithm:** Dynamic calculation based on defect severity, lecture hours proximity, duplicate weights, and multi-media evidence bonuses.
 - [x] **Live Spatial Campus Floor Map:** Interactive SVG floor map with floor selector (Floor 1, Floor 2, Floor 3) and color-coded status pins (🔴 Red, 🟡 Yellow, 🟢 Green).
-- [x] **One-Click WhatsApp/SMS Work Order Dispatch:** Generates pre-formatted WhatsApp job links (`https://wa.me/...`) with complete location and defect details.
-- [x] **Resolution Action with Fixed Photo Proof:** Admin modal to attach repair photo proof which immediately updates the public spot badge.
-- [x] **PostgreSQL / Supabase Schema (`supabase_schema.sql`):** 5-table schema with Row-Level Security (RLS) policies, Realtime publication, and seed data.
+- [x] **PostgreSQL / Supabase Schema (`supabase_schema.sql`):** 5-table schema with Row-Level Security (RLS) policies, Realtime publication for tickets and campus locations, and seed data.
 - [x] **Live Supabase Database Connection Verified:** Verified live cloud queries on `fxpjftdtfsbsthucvdpm`: `campus_locations` (6 rows), `incident_tickets` (3 rows), `maintenance_staff` (4 rows) all return HTTP 200 OK.
 - [x] **Supabase Client SDK & Fallback:** `@supabase/supabase-js` integration in `src/lib/supabaseClient.ts` with hybrid offline fallback.
 - [x] **Supabase Credentials Configured:** `.env` updated with live project URL and anon public key.
