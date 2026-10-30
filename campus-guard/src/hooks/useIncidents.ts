@@ -516,6 +516,33 @@ export function useIncidents() {
           .then(({ error }) => {
             if (error) console.warn('Supabase dispatch update notice:', error);
           });
+
+        // Trigger Automated WhatsApp / SMS Edge Function Alert
+        const targetTicket = tickets.find((t) => t.ticket_id === ticketId);
+        if (targetTicket && staffMember) {
+          supabase.functions
+            .invoke('dispatch-alert', {
+              body: {
+                type: 'WORK_ORDER_DISPATCH',
+                ticketId,
+                location: `${targetTicket.location?.building_name || 'Campus Building'}, Floor ${targetTicket.location?.floor_number || 1}, Room ${targetTicket.location?.room_number || ''}`,
+                category: targetTicket.category,
+                severityScore: targetTicket.ai_severity_score,
+                phone: staffMember.phone_number,
+                staffName: staffMember.full_name,
+                duplicateCount: targetTicket.duplicate_count,
+                notes: targetTicket.voice_transcript || 'Immediate maintenance response requested.',
+                uploadUrl: `${window.location.origin}/maintenance?ticket=${ticketId}`,
+              },
+            })
+            .then(({ data, error }) => {
+              if (error) {
+                console.warn('Notice: Edge function dispatch alert (fallback active):', error);
+              } else {
+                console.log('⚡ Edge Function dispatch alert delivered:', data);
+              }
+            });
+        }
       }
     },
     []

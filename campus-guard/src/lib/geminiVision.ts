@@ -1,4 +1,5 @@
 import { IncidentCategory } from '../types';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 export interface VisionAnalysisResult {
   tags: string[];
@@ -93,9 +94,31 @@ export async function analyzeImageDefects(
   imageDataUrl: string,
   category: IncidentCategory
 ): Promise<VisionAnalysisResult> {
+  // 1. First priority: Supabase Edge Function (Gemini API key is 100% hidden on server)
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-defect', {
+        body: { imageDataUrl, category },
+      });
+
+      if (!error && data && Array.isArray(data.tags)) {
+        console.log('⚡ Edge Function Vision result:', data);
+        return {
+          tags: data.tags,
+          severityScore: Number(data.severityScore) || 8.0,
+          summary: data.summary || 'Defect verified by Gemini 2.5 Flash via Supabase Edge Function.',
+          isRealAI: true,
+          modelUsed: data.modelUsed || 'Google Gemini 2.5 Flash (Supabase Edge Function)',
+        };
+      }
+    } catch (edgeErr) {
+      console.warn('Notice: Supabase Edge Function bypassed, falling back to direct client pipeline:', edgeErr);
+    }
+  }
+
   const envKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  // 1. Silent Gemini Vision Pipeline (if configured by system in .env)
+  // 2. Direct client fallback (when running in local dev with VITE_GEMINI_API_KEY)
   if (envKey && typeof envKey === 'string' && envKey.trim().length > 20 && !envKey.includes('your-gemini')) {
     try {
       const [header, base64Data] = imageDataUrl.split(',');
