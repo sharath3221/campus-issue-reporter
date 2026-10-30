@@ -10,6 +10,8 @@
 ## 1. Feature Implementation Status
 
 ### Completed & Verified Features
+- [x] **Dedicated Maintenance Staff Portal (`/maintenance`):** Separate mobile-first portal for technicians (plumbers, electricians, janitors, carpenters) to view work orders, compare Before vs After photos, and snap live camera Fixed Photo Proof.
+- [x] **WhatsApp Deep-Link Work Order Resolution:** WhatsApp dispatch links automatically include `https://.../maintenance?ticket=...` for 1-tap mobile completion by technicians.
 - [x] **Zero-Login Architecture:** Completely decoupled incident intake from authentication; no logins, passwords, or emails required.
 - [x] **Direct Executive Pipeline (Strict Constraint 1):** Removed all Class Representative (CR) triage, approval gates, and intermediate verifications.
 - [x] **Clean Public Reporter UI (Strict Constraint 2):** Public route `/report` stripped of all admin queues, staff directories, internal dashboards, and API key prompts.

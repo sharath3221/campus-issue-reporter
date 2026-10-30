@@ -203,8 +203,8 @@ export const AdminLoginPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Back to Public Reporter */}
-        <div style={{ textAlign: 'center', marginTop: 20 }}>
+        {/* Navigation Links */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
           <button
             onClick={() => navigate('/report')}
             style={{
@@ -216,7 +216,21 @@ export const AdminLoginPage: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            ← Back to Public Spot Reporter (/report)
+            ← Public Reporter
+          </button>
+          <span style={{ color: '#CBD5E1' }}>•</span>
+          <button
+            onClick={() => navigate('/maintenance')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#D97706',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            🔧 Maintenance Portal →
           </button>
         </div>
       </div>

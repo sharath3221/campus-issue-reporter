@@ -20,6 +20,7 @@ import {
   ExternalLink,
   MessageSquare,
   Flame,
+  Wrench,
 } from 'lucide-react';
 import {
   IncidentTicket,
@@ -95,14 +96,16 @@ export const AdminDashboardPage: React.FC = () => {
     dispatchStaff(dispatchModalTicket.ticket_id, selectedStaffId);
     const staff = maintenanceStaff.find((s) => s.staff_id === selectedStaffId);
 
-    // Build WhatsApp job message
+    // Build WhatsApp job message with direct upload proof link
+    const uploadUrl = `${window.location.origin}/maintenance?ticket=${dispatchModalTicket.ticket_id}`;
     const msg = encodeURIComponent(
       `🚨 *CampusPulse Job Dispatch* (Priority ${dispatchModalTicket.ai_severity_score}/100)\n` +
         `• Location: ${dispatchModalTicket.location?.building_name}, Floor ${dispatchModalTicket.location?.floor_number}, Room: ${dispatchModalTicket.location?.room_number}\n` +
         `• Category: ${CATEGORY_META[dispatchModalTicket.category].label}\n` +
         `• Duplicates: ${dispatchModalTicket.duplicate_count} students reported\n` +
         `• Note: ${dispatchModalTicket.voice_transcript || 'Immediate attendance required.'}\n` +
-        `• Authorized by: ${currentUser?.full_name} (${currentUser?.role})`
+        `• Authorized by: ${currentUser?.full_name} (${currentUser?.role})\n\n` +
+        `📸 *Submit Fixed Photo Proof when done:*\n${uploadUrl}`
     );
 
     const waUrl = `https://wa.me/${staff?.phone_number.replace('+', '')}?text=${msg}`;
@@ -219,6 +222,26 @@ export const AdminDashboardPage: React.FC = () => {
             }}
           >
             View Public Reporter
+          </button>
+
+          <button
+            onClick={() => navigate('/maintenance')}
+            style={{
+              background: '#F59E0B20',
+              border: '1px solid #F59E0B50',
+              color: '#FCD34D',
+              borderRadius: 8,
+              padding: '6px 10px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <Wrench size={14} />
+            <span>Staff Portal</span>
           </button>
 
           <button

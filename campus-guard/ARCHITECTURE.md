@@ -269,7 +269,8 @@ campus-guard/
     └── pages/
         ├── ReportPage.tsx           # Public Zero-Login Reporter (Strict Constraint 1 & 2)
         ├── AdminLoginPage.tsx       # Separate Secure Login (Strict Constraint 3)
-        └── AdminDashboardPage.tsx   # Executive GIS Map & Work Order Dispatch Feed
+        ├── AdminDashboardPage.tsx   # Executive GIS Map & Work Order Dispatch Feed
+        └── MaintenancePage.tsx      # Field Technician Portal: Fixed Photo Proof & Resolution
 ```
 
 ---
@@ -283,3 +284,4 @@ campus-guard/
 | **v2.1.0** | 2026-10-30 | **Supabase Cloud Database Integration:**<br>• Installed `@supabase/supabase-js` SDK.<br>• Created `supabase_schema.sql` with RLS policies (zero-login public inserts, admin dispatch updates).<br>• Added Supabase Realtime replication for instant cross-device synchronization between public spot badge and admin floor map.<br>• Implemented Supabase Storage bucket (`incident-media`) integration.<br>• Implemented `supabaseClient.ts` with graceful hybrid offline/local cache fallback. | Full-Stack AI System Architect |
 | **v2.2.0** | 2026-10-30 | **Supabase MCP Server & Agent Skills Configuration:**<br>• Configured `~/.gemini/antigravity/mcp_config.json` with Supabase MCP Server (`project_ref=fxpjftdtfsbsthucvdpm`) with docs, account, database, debugging, and development features.<br>• Installed official Supabase agent skills (`supabase`, `supabase-postgres-best-practices`) via `npx skills add supabase/agent-skills`.<br>• Auto-populated `VITE_SUPABASE_URL=https://fxpjftdtfsbsthucvdpm.supabase.co` in `.env`. | Full-Stack AI System Architect |
 | **v2.3.0** | 2026-10-30 | **Camera & Photo Reliability Overhaul:**<br>• Added live interactive WebRTC camera viewfinder modal (`navigator.mediaDevices.getUserMedia`) with back-camera preference and instant canvas frame capture.<br>• Added device gallery/file picker fallback and quick sample photo selector for desktop testing.<br>• Strictly enforced mandatory photo upload: reports cannot be submitted without a captured or uploaded photo proof (disabled submit button + alert state).<br>• Removed voice-to-text recording section to eliminate browser speech recognition barriers on non-HTTPS origins and maintain foolproof simplicity for custodial staff. | Full-Stack AI System Architect |
+| **v2.4.0** | 2026-10-30 | **Dedicated Maintenance Staff Portal (`/maintenance`):**<br>• Created mobile-optimized portal for on-duty technicians (plumbers, electricians, janitors, carpenters).<br>• Enables staff to view assigned work orders, compare Before vs After defect photos, and snap live camera Fixed Photo Proof.<br>• Direct deep-linking from WhatsApp work orders (`/maintenance?ticket=...`).<br>• Resolving a job triggers real-time updates across Supabase, turns the Public Spot Badge green with fixed photo proof, and updates the executive spatial map pin. | Full-Stack AI System Architect |
