@@ -143,34 +143,69 @@ export const ReportPage: React.FC = () => {
   const snapPhoto = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    let dataUrl: string | null = null;
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      }
+    } catch (e) {
+      console.error('Snapshot capture error:', e);
+    } finally {
+      // Immediately stop all camera hardware and release the green light indicator
+      closeCamera();
+    }
+
+    if (dataUrl) {
       processCapturedImage(dataUrl);
     }
-    closeCamera();
   };
 
-  // Close Camera Stream
+  // Close Camera Stream and release all hardware device locks
   const closeCamera = () => {
+    // 1. Release tracks from video element directly
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        if (videoRef.current.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach((track) => {
+            track.enabled = false;
+            track.stop();
+          });
+          videoRef.current.srcObject = null;
+        }
+      } catch (err) {
+        console.warn('Error clearing video srcObject:', err);
+      }
+    }
+
+    // 2. Stop tracks from mediaStream reference
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      try {
+        mediaStreamRef.current.getTracks().forEach((track) => {
+          track.enabled = false;
+          track.stop();
+        });
+      } catch (err) {
+        console.warn('Error stopping mediaStream tracks:', err);
+      }
       mediaStreamRef.current = null;
     }
+
     setIsCameraOpen(false);
     setCameraError(null);
   };
 
-  // Cleanup camera stream on unmount
+  // Complete cleanup on component unmount
   useEffect(() => {
     return () => {
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
+      closeCamera();
     };
   }, []);
 

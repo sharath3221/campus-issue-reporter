@@ -56,6 +56,8 @@
 - None currently blocking. If the Supabase database migration (`supabase_schema.sql`) hasn't been executed yet in the Supabase SQL Editor, queries fall back safely to responsive local state and alert with an actionable warning.
 
 ### Issues Resolved
+- [x] **Resolved:** Immediate Camera Hardware Release: Fixed camera track shutdown so the green indicator light turns off immediately upon taking a photo or closing/unmounting the camera viewfinder (stops tracks, disables track state, pauses video element, and clears `video.srcObject`).
+- [x] **Resolved:** Dedicated Maintenance Staff Portal (`/maintenance`): Created separate mobile-first portal for technicians to view assigned work orders, compare Before vs After defect photos, and upload live Fixed Photo Proof.
 - [x] **Resolved:** Autonomous AI Computer Vision: Removed all API key prompts, modals, and user input requirements. The built-in Computer Vision service analyzes image pixel features (edges, color spectrum, luminance, and defect patterns) automatically in-browser with zero configuration needed from users or custodial staff.
 - [x] **Resolved:** Duplicate report identification fixed: Modified `useIncidents.ts` to detect and cluster any active unresolved incident reports on the same spot without getting blocked by elapsed timestamp offsets.
 - [x] **Resolved:** Camera Access & Mandatory Photo Proof: Added live WebRTC camera viewfinder with device stream snapshot, file picker fallback, and desktop test photo selector. Strictly enforced mandatory photo upload (submit button is disabled and displays a prominent warning until photo is attached).
