@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, ArrowRight, UserCheck, KeyRound, Building2 } from 'lucide-react';
+import { Shield, Lock, Mail, ArrowRight, KeyRound, AlertCircle } from 'lucide-react';
 import { AdminRole, AdminUser } from '../types';
-import { adminUsers } from '../data/mockData';
+import {
+  signInWithGoogleSupabase,
+  signInWithSupabasePassword,
+  getActiveAdminSession,
+} from '../lib/supabaseAuth';
 
 export const AdminLoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -10,17 +14,55 @@ export const AdminLoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<AdminRole>('PRINCIPAL');
   const [error, setError] = useState('');
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Check if session already exists or returning from Supabase OAuth
+  useEffect(() => {
+    async function checkExistingSession() {
+      const session = await getActiveAdminSession();
+      if (session) {
+        navigate('/admin/dashboard', { replace: true });
+      }
+    }
+    checkExistingSession();
+  }, [navigate]);
+
+  // Email / Password / Passkey Form Submit using Supabase Auth
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const found = adminUsers.find((u) => u.role === role) || adminUsers[0];
-    localStorage.setItem('campuspulse_admin_session', JSON.stringify(found));
-    navigate('/admin/dashboard');
+    if (!email || !password) {
+      setError('Please enter both your institutional email and secret passkey.');
+      return;
+    }
+
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      await signInWithSupabasePassword(email, password, role);
+      navigate('/admin/dashboard');
+    } catch (err: any) {
+      console.warn('Auth Error:', err);
+      setError(err.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleQuickLogin = (user: AdminUser) => {
-    localStorage.setItem('campuspulse_admin_session', JSON.stringify(user));
-    navigate('/admin/dashboard');
+  // Google Sign-In with Supabase Authentication
+  const handleGoogleLogin = async () => {
+    setError('');
+    setIsGoogleLoading(true);
+
+    try {
+      await signInWithGoogleSupabase();
+      // Supabase OAuth redirects to Google login page and returns to /admin/dashboard
+    } catch (err: any) {
+      console.warn('Supabase Google Auth Error:', err);
+      setError(err.message || 'Google Sign-In failed or domain is not authorized in Supabase Auth.');
+      setIsGoogleLoading(false);
+    }
   };
 
   return (
@@ -40,7 +82,7 @@ export const AdminLoginPage: React.FC = () => {
           maxWidth: 440,
           background: 'white',
           borderRadius: 24,
-          padding: '32px 28px',
+          padding: '36px 30px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
         }}
       >
@@ -67,8 +109,84 @@ export const AdminLoginPage: React.FC = () => {
             CampusPulse Admin Portal
           </h1>
           <p style={{ fontSize: '0.825rem', color: '#64748B', marginTop: 4 }}>
-            Strict Authentication for Principal, Management & Facilities Directorate (Constraint 3)
+            Strict Authentication for Principal, Management & Administrative Officers (Constraint 3)
           </p>
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div
+            style={{
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: 10,
+              padding: '10px 14px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: '#DC2626',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+            }}
+          >
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Google Sign-In using Supabase Auth */}
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={isGoogleLoading || isSubmitting}
+          style={{
+            width: '100%',
+            padding: '12px 16px',
+            borderRadius: 12,
+            border: '1.5px solid #CBD5E1',
+            background: 'white',
+            color: '#0F172A',
+            fontSize: '0.92rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          {/* Official Google Icon */}
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+            />
+          </svg>
+          <span>{isGoogleLoading ? 'Connecting to Google with Supabase...' : 'Sign in with Google'}</span>
+        </button>
+
+        {/* Clean Divider */}
+        <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', gap: 12 }}>
+          <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
+          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
+            Or with Passkey
+          </span>
+          <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
         </div>
 
         {/* Login Form */}
@@ -105,7 +223,7 @@ export const AdminLoginPage: React.FC = () => {
               <Mail size={18} color="#94A3B8" style={{ position: 'absolute', left: 12, top: 12 }} />
               <input
                 type="email"
-                placeholder="officer@campuspulse.edu"
+                placeholder="principal@campuspulse.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 style={{
@@ -114,6 +232,7 @@ export const AdminLoginPage: React.FC = () => {
                   borderRadius: 10,
                   border: '1.5px solid #CBD5E1',
                   fontSize: '0.9rem',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
@@ -136,6 +255,7 @@ export const AdminLoginPage: React.FC = () => {
                   borderRadius: 10,
                   border: '1.5px solid #CBD5E1',
                   fontSize: '0.9rem',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
@@ -143,6 +263,7 @@ export const AdminLoginPage: React.FC = () => {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             style={{
               width: '100%',
               padding: '12px',
@@ -160,51 +281,13 @@ export const AdminLoginPage: React.FC = () => {
               marginTop: 6,
             }}
           >
-            <span>Authorize & Access Dashboard</span>
+            <span>{isSubmitting ? 'Authenticating...' : 'Authorize & Access Dashboard'}</span>
             <ArrowRight size={18} />
           </button>
         </form>
 
-        {/* Quick Demo Logins */}
-        <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px dashed #CBD5E1' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 10, textAlign: 'center' }}>
-            Instant Demo Authentication
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {adminUsers.map((user) => (
-              <button
-                key={user.admin_id}
-                type="button"
-                onClick={() => handleQuickLogin(user)}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 10,
-                  border: '1px solid #E2E8F0',
-                  background: '#F8FAFC',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '0.825rem', fontWeight: 800, color: '#1E293B' }}>
-                    {user.full_name}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
-                    {user.role} • {user.department}
-                  </div>
-                </div>
-                <UserCheck size={16} color="#0288D1" />
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Navigation Links */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24 }}>
           <button
             onClick={() => navigate('/report')}
             style={{
@@ -237,4 +320,3 @@ export const AdminLoginPage: React.FC = () => {
     </div>
   );
 };
-

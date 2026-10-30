@@ -200,21 +200,6 @@ export const MaintenancePage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Quick Demo Fixed Photos
-  const handleUseDemoFixedPhoto = (category: IncidentCategory) => {
-    const demoFixedPhotos: Record<IncidentCategory, string> = {
-      WATER_SUPPLY:
-        'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=600&q=80',
-      LIGHTS_FAN_PROJECTOR:
-        'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=600&q=80',
-      WASHROOM_CLEANLINESS:
-        'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-      FURNITURE_MAINTENANCE:
-        'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=600&q=80',
-    };
-    setFixedPhotoPreview(demoFixedPhotos[category]);
-  };
-
   // Submit Resolution & Fixed Photo Proof
   const handleSubmitResolution = (e: React.FormEvent) => {
     e.preventDefault();
@@ -724,27 +709,6 @@ export const MaintenancePage: React.FC = () => {
                 >
                   <Upload size={18} />
                   <span>Upload from Gallery 📁</span>
-                </button>
-              </div>
-            )}
-
-            {/* Quick Demo Sample Photo Link */}
-            {!fixedPhotoPreview && (
-              <div style={{ textAlign: 'center', marginBottom: 14 }}>
-                <button
-                  type="button"
-                  onClick={() => handleUseDemoFixedPhoto(resolvingTicket.category)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#0288D1',
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  💡 Testing on desktop? Click to use sample fixed proof photo
                 </button>
               </div>
             )}

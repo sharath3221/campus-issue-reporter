@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Flame,
   Wrench,
+  QrCode,
 } from 'lucide-react';
 import {
   IncidentTicket,
@@ -32,15 +33,28 @@ import {
   STATUS_META,
 } from '../types';
 import { useIncidents } from '../hooks/useIncidents';
+import { QRSpotGenerator } from '../components/QRSpotGenerator';
+import { getActiveAdminSession, signOutAdmin, ADMIN_SESSION_KEY } from '../lib/supabaseAuth';
 
 export const AdminDashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { tickets, maintenanceStaff, dispatchStaff, resolveTicket, isSupabaseConnected } = useIncidents();
+  const {
+    tickets,
+    maintenanceStaff,
+    campusLocations,
+    addCampusLocation,
+    dispatchStaff,
+    resolveTicket,
+    isSupabaseConnected,
+  } = useIncidents();
+
+  // Navigation tab
+  const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'QR_STUDIO'>('OPERATIONS');
 
   // Admin Session Check (Strict Constraint 3)
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
     try {
-      const sess = localStorage.getItem('campuspulse_admin_session');
+      const sess = localStorage.getItem(ADMIN_SESSION_KEY);
       if (sess) return JSON.parse(sess);
     } catch (e) {
       console.error(e);
@@ -49,13 +63,19 @@ export const AdminDashboardPage: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!currentUser) {
-      navigate('/admin/login');
+    async function verifyAuth() {
+      const session = await getActiveAdminSession();
+      if (!session) {
+        navigate('/admin/login');
+      } else {
+        setCurrentUser(session);
+      }
     }
-  }, [currentUser, navigate]);
+    verifyAuth();
+  }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('campuspulse_admin_session');
+  const handleLogout = async () => {
+    await signOutAdmin();
     navigate('/admin/login');
   };
 
@@ -266,9 +286,81 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       </header>
 
+      {/* Primary Sub-Navigation Bar */}
+      <div
+        style={{
+          background: '#1E293B',
+          borderBottom: '1px solid #334155',
+          padding: '0 24px',
+          display: 'flex',
+          gap: 12,
+        }}
+      >
+        <button
+          onClick={() => setActiveNavTab('OPERATIONS')}
+          style={{
+            padding: '12px 18px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeNavTab === 'OPERATIONS' ? '3px solid #38BDF8' : '3px solid transparent',
+            color: activeNavTab === 'OPERATIONS' ? '#38BDF8' : '#94A3B8',
+            fontWeight: 800,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Layers size={16} />
+          <span>Live Operations & Spatial Map</span>
+        </button>
+
+        <button
+          onClick={() => setActiveNavTab('QR_STUDIO')}
+          style={{
+            padding: '12px 18px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeNavTab === 'QR_STUDIO' ? '3px solid #38BDF8' : '3px solid transparent',
+            color: activeNavTab === 'QR_STUDIO' ? '#38BDF8' : '#94A3B8',
+            fontWeight: 800,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <QrCode size={16} />
+          <span>Spot QR Sticker Generator & Directory</span>
+          <span
+            style={{
+              background: '#0288D1',
+              color: 'white',
+              fontSize: '0.65rem',
+              padding: '2px 7px',
+              borderRadius: 10,
+              fontWeight: 800,
+            }}
+          >
+            {campusLocations.length}
+          </span>
+        </button>
+      </div>
+
       {/* Main Content Area */}
       <main style={{ maxWidth: 1240, margin: '0 auto', padding: '24px 20px' }}>
-        {/* KPI Summary Cards */}
+        {activeNavTab === 'QR_STUDIO' ? (
+          <QRSpotGenerator
+            campusLocations={campusLocations}
+            onAddLocation={addCampusLocation}
+          />
+        ) : (
+          <>
+            {/* KPI Summary Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
           <div style={{ background: 'white', borderRadius: 16, padding: '16px 20px', border: '1px solid #E2E8F0', borderLeft: '5px solid #EF4444', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Active Reported</div>
@@ -735,6 +827,8 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </>
+      )}
       </main>
 
       {/* DISPATCH TO MAINTENANCE MODAL (§3) */}

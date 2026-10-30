@@ -104,11 +104,25 @@ ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incident_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incident_media ENABLE ROW LEVEL SECURITY;
 
--- 4.1 Campus Locations: Public Read
+-- 4.1 Campus Locations: Public Read & Admin Ingestion
+DROP POLICY IF EXISTS "Public can view campus locations" ON campus_locations;
 CREATE POLICY "Public can view campus locations"
     ON campus_locations FOR SELECT
     TO anon, authenticated
     USING (true);
+
+DROP POLICY IF EXISTS "Admins can create campus locations" ON campus_locations;
+CREATE POLICY "Admins can create campus locations"
+    ON campus_locations FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admins can update campus locations" ON campus_locations;
+CREATE POLICY "Admins can update campus locations"
+    ON campus_locations FOR UPDATE
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
 
 -- 4.2 Incident Tickets:
 -- STRICT CONSTRAINT 1: Zero-Login public users can INSERT incident reports without credentials
@@ -172,6 +186,13 @@ BEGIN
         WHERE pubname = 'supabase_realtime' AND tablename = 'incident_media'
     ) THEN
         ALTER PUBLICATION supabase_realtime ADD TABLE incident_media;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'campus_locations'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE campus_locations;
     END IF;
 END $$;
 

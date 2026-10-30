@@ -221,21 +221,6 @@ export const ReportPage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Fast Sample Photo for Testing
-  const handleUseSamplePhoto = () => {
-    const samplePhotos: Record<IncidentCategory, string> = {
-      WATER_SUPPLY:
-        'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-      LIGHTS_FAN_PROJECTOR:
-        'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=600&q=80',
-      WASHROOM_CLEANLINESS:
-        'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=600&q=80',
-      FURNITURE_MAINTENANCE:
-        'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=600&q=80',
-    };
-    processCapturedImage(samplePhotos[selectedCategory]);
-  };
-
   // Submit Report (Enforce Mandatory Photo)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -383,30 +368,6 @@ export const ReportPage: React.FC = () => {
           </div>
           <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600, marginTop: 2 }}>
             Floor {currentSpot.floor_number} • Room / Zone: {currentSpot.room_number} ({currentSpot.zone_category})
-          </div>
-
-          {/* Demo Spot QR Switcher */}
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Simulate another Spot QR:</span>
-            <select
-              style={{
-                fontSize: '0.75rem',
-                padding: '3px 8px',
-                borderRadius: 6,
-                border: '1px solid #CBD5E1',
-                background: '#F8FAFC',
-                color: '#334155',
-                fontWeight: 600,
-              }}
-              value={currentSpot.location_id}
-              onChange={(e) => setSearchParams({ loc: e.target.value })}
-            >
-              {campusLocations.map((loc) => (
-                <option key={loc.location_id} value={loc.location_id}>
-                  {loc.building_name} - {loc.room_number}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -887,27 +848,6 @@ export const ReportPage: React.FC = () => {
                   <Upload size={24} color="#475569" />
                   <span>Upload Photo 📁</span>
                   <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600 }}>From Gallery / Files</span>
-                </button>
-              </div>
-            )}
-
-            {/* Quick Demo Sample Photo Link (Helpful on Desktop without webcam) */}
-            {!photoPreview && !isCameraOpen && (
-              <div style={{ textAlign: 'center', marginTop: 2 }}>
-                <button
-                  type="button"
-                  onClick={handleUseSamplePhoto}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#0288D1',
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  💡 Testing on desktop? Click here to use sample {CATEGORY_META[selectedCategory].label} photo
                 </button>
               </div>
             )}

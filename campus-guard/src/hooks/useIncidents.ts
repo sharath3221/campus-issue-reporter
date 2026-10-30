@@ -7,19 +7,47 @@ import {
   MaintenanceStaff,
 } from '../types';
 import {
-  campusLocations,
+  campusLocations as defaultLocations,
   maintenanceStaff,
   initialIncidentTickets,
 } from '../data/mockData';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
-const STORAGE_KEY = 'campuspulse_tickets_v1';
+const TICKETS_STORAGE_KEY = 'campuspulse_tickets_v1';
+const LOCATIONS_STORAGE_KEY = 'campuspulse_locations_v1';
 
 export function useIncidents() {
+  // 1. Campus Locations State (Dynamic & Realtime)
+  const [locations, setLocations] = useState<CampusLocation[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCATIONS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed reading locations from localStorage', e);
+    }
+    return defaultLocations;
+  });
+
+  // 2. Incident Tickets State (Real data only, purging any legacy mock demo tickets)
   const [tickets, setTickets] = useState<IncidentTicket[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem(TICKETS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Filter out legacy demo mock tickets if present
+          const cleaned = parsed.filter(
+            (t: IncidentTicket) =>
+              !['tick-1001', 'tick-1002', 'tick-1003', 'tick-1004', 'tick-1005', 'tick-1006'].includes(
+                t.ticket_id
+              )
+          );
+          return cleaned;
+        }
+      }
     } catch (e) {
       console.error('Failed reading tickets from localStorage', e);
     }
@@ -28,21 +56,48 @@ export function useIncidents() {
 
   const [isLoading, setIsLoading] = useState<boolean>(isSupabaseConfigured);
 
-  // Sync to localStorage as client cache
+  // Sync tickets to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tickets));
+      localStorage.setItem(TICKETS_STORAGE_KEY, JSON.stringify(tickets));
     } catch (e) {
       console.error('Failed writing tickets to localStorage', e);
     }
   }, [tickets]);
 
-  // Fetch from Supabase and subscribe to Realtime if configured
+  // Sync locations to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(locations));
+    } catch (e) {
+      console.error('Failed writing locations to localStorage', e);
+    }
+  }, [locations]);
+
+  // Fetch from Supabase and subscribe to Realtime
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
     let isMounted = true;
 
+    // 1. Fetch live campus locations from Supabase
+    async function fetchSupabaseLocations() {
+      try {
+        const { data, error } = await supabase!
+          .from('campus_locations')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data && data.length > 0 && isMounted) {
+          setLocations(data as CampusLocation[]);
+          localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(data));
+        }
+      } catch (err) {
+        console.warn('Notice: Error fetching campus locations from Supabase:', err);
+      }
+    }
+
+    // 2. Fetch live tickets from Supabase
     async function fetchSupabaseTickets() {
       try {
         setIsLoading(true);
@@ -56,15 +111,15 @@ export function useIncidents() {
           .order('reported_at', { ascending: false });
 
         if (error) {
-          console.error('Supabase fetch error, using local cached tickets:', error);
+          console.warn('Notice: Supabase fetch error, using local cached tickets:', error);
           return;
         }
 
-        if (data && isMounted && data.length > 0) {
+        if (data && isMounted) {
           const mapped: IncidentTicket[] = data.map((row: any) => ({
             ticket_id: row.ticket_id,
             location_id: row.location_id,
-            location: row.location || campusLocations.find((l) => l.location_id === row.location_id),
+            location: row.location || locations.find((l) => l.location_id === row.location_id),
             category: row.category as IncidentCategory,
             ai_severity_score: Number(row.ai_severity_score),
             status: row.status as TicketStatus,
@@ -75,7 +130,9 @@ export function useIncidents() {
             fixed_photo_url: row.fixed_photo_url,
             ai_vision_tags: Array.isArray(row.ai_vision_tags) ? row.ai_vision_tags : [],
             assigned_staff_id: row.assigned_staff_id,
-            assigned_staff: row.assigned_staff || maintenanceStaff.find((s) => s.staff_id === row.assigned_staff_id),
+            assigned_staff:
+              row.assigned_staff ||
+              maintenanceStaff.find((s) => s.staff_id === row.assigned_staff_id),
             reported_at: row.reported_at,
             dispatched_at: row.dispatched_at,
             resolved_at: row.resolved_at,
@@ -84,16 +141,17 @@ export function useIncidents() {
           setTickets(mapped);
         }
       } catch (err) {
-        console.error('Failed to load tickets from Supabase:', err);
+        console.warn('Failed to load tickets from Supabase:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
     }
 
+    fetchSupabaseLocations();
     fetchSupabaseTickets();
 
-    // Supabase Realtime Subscription (§5)
-    const channel = supabase!
+    // Supabase Realtime Subscription for tickets
+    const ticketChannel = supabase!
       .channel('public:incident_tickets')
       .on(
         'postgres_changes',
@@ -107,7 +165,7 @@ export function useIncidents() {
               const mapped: IncidentTicket = {
                 ticket_id: newRow.ticket_id,
                 location_id: newRow.location_id,
-                location: campusLocations.find((l) => l.location_id === newRow.location_id),
+                location: locations.find((l) => l.location_id === newRow.location_id),
                 category: newRow.category,
                 ai_severity_score: Number(newRow.ai_severity_score),
                 status: newRow.status,
@@ -153,9 +211,30 @@ export function useIncidents() {
       )
       .subscribe();
 
+    // Supabase Realtime Subscription for campus_locations
+    const locationsChannel = supabase!
+      .channel('public:campus_locations')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campus_locations' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const row = payload.new as CampusLocation;
+            setLocations((prev) => {
+              const filtered = prev.filter((l) => l.location_id !== row.location_id);
+              const updated = [row, ...filtered];
+              localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updated));
+              return updated;
+            });
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       isMounted = false;
-      supabase!.removeChannel(channel);
+      supabase!.removeChannel(ticketChannel);
+      supabase!.removeChannel(locationsChannel);
     };
   }, []);
 
@@ -194,6 +273,56 @@ export function useIncidents() {
     );
   };
 
+  // Add / Register a new Campus Location (Admin QR Generator)
+  const addCampusLocation = useCallback(
+    async (newLoc: CampusLocation): Promise<boolean> => {
+      // 1. Update local reactive state and cache
+      setLocations((prev) => {
+        const filtered = prev.filter((l) => l.location_id !== newLoc.location_id);
+        const updated = [newLoc, ...filtered];
+        try {
+          localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+        return updated;
+      });
+
+      // 2. Persist to Supabase database
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { error } = await supabase.from('campus_locations').upsert(
+            {
+              location_id: newLoc.location_id,
+              building_name: newLoc.building_name,
+              floor_number: newLoc.floor_number,
+              room_number: newLoc.room_number,
+              zone_category: newLoc.zone_category,
+              gps_latitude: newLoc.gps_latitude || 16.8456,
+              gps_longitude: newLoc.gps_longitude || 74.6012,
+              fixture_id: newLoc.fixture_id,
+              x_coord: newLoc.x_coord || 200,
+              y_coord: newLoc.y_coord || 150,
+            },
+            { onConflict: 'location_id' }
+          );
+
+          if (error) {
+            console.warn('Supabase location upsert warning:', error);
+            return false;
+          }
+          return true;
+        } catch (err) {
+          console.warn('Supabase location error:', err);
+          return false;
+        }
+      }
+
+      return true;
+    },
+    []
+  );
+
   // Submit report with Smart Duplicate Clustering & Supabase Ingestion
   const submitReport = useCallback(
     (params: {
@@ -213,7 +342,7 @@ export function useIncidents() {
         aiVisionTags = [],
       } = params;
 
-      const loc = campusLocations.find((l) => l.location_id === locationId) || {
+      const loc = locations.find((l) => l.location_id === locationId) || {
         location_id: locationId,
         building_name: 'Campus Building',
         floor_number: 1,
@@ -224,7 +353,6 @@ export function useIncidents() {
       };
 
       // Check for existing active ticket at same location that is currently unresolved
-      // Priority 1: Same location and same category (exact duplicate)
       let existingIndex = tickets.findIndex(
         (t) =>
           t.location_id === locationId &&
@@ -232,7 +360,6 @@ export function useIncidents() {
           t.category === category
       );
 
-      // Priority 2: Same location with any active unresolved defect
       if (existingIndex === -1) {
         existingIndex = tickets.findIndex(
           (t) => t.location_id === locationId && t.status !== 'RESOLVED'
@@ -282,7 +409,7 @@ export function useIncidents() {
             })
             .eq('ticket_id', existing.ticket_id)
             .then(({ error }) => {
-              if (error) console.error('Supabase duplicate update error:', error);
+              if (error) console.warn('Supabase duplicate update notice:', error);
             });
         }
 
@@ -298,7 +425,7 @@ export function useIncidents() {
       );
 
       const newTicket: IncidentTicket = {
-        ticket_id: `tick-${Date.now().toString().slice(-5)}`,
+        ticket_id: `tick-${Date.now().toString().slice(-6)}`,
         location_id: locationId,
         location: loc,
         category,
@@ -332,13 +459,13 @@ export function useIncidents() {
             reported_at: newTicket.reported_at,
           })
           .then(({ error }) => {
-            if (error) console.error('Supabase ticket insert error:', error);
+            if (error) console.warn('Supabase ticket insert notice:', error);
           });
       }
 
       return { ticket: newTicket, isDuplicate: false };
     },
-    [tickets]
+    [tickets, locations]
   );
 
   // Dispatch work order to maintenance staff (via WhatsApp/SMS)
@@ -372,7 +499,7 @@ export function useIncidents() {
           })
           .eq('ticket_id', ticketId)
           .then(({ error }) => {
-            if (error) console.error('Supabase dispatch update error:', error);
+            if (error) console.warn('Supabase dispatch update notice:', error);
           });
       }
     },
@@ -382,9 +509,7 @@ export function useIncidents() {
   // Mark ticket as resolved with fixed photo proof
   const resolveTicket = useCallback((ticketId: string, fixedPhotoUrl?: string) => {
     const resolvedAt = new Date().toISOString();
-    const finalPhoto =
-      fixedPhotoUrl ||
-      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=600&q=80';
+    const finalPhoto = fixedPhotoUrl || '';
 
     setTickets((prev) =>
       prev.map((t) =>
@@ -410,7 +535,7 @@ export function useIncidents() {
         })
         .eq('ticket_id', ticketId)
         .then(({ error }) => {
-          if (error) console.error('Supabase resolve update error:', error);
+          if (error) console.warn('Supabase resolve update notice:', error);
         });
     }
   }, []);
@@ -427,8 +552,9 @@ export function useIncidents() {
     tickets,
     isLoading,
     isSupabaseConnected: isSupabaseConfigured,
-    campusLocations,
+    campusLocations: locations,
     maintenanceStaff,
+    addCampusLocation,
     submitReport,
     dispatchStaff,
     resolveTicket,
