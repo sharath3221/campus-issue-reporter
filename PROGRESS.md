@@ -17,10 +17,10 @@
 - [x] **Spot QR Metadata Auto-Population:** Reads `?loc=QR-BLD-A-FL1-WASH-02` to extract Building, Floor, Room, and Fixture ID with interactive QR spot simulator.
 - [x] **Pictographic UI for Support Staff (*Aayas*):** 4 large tactile buttons with icons (🚰 Water, 💡 Lights/Fan, 🧹 Cleanliness, 🪑 Furniture).
 - [x] **Speech Synthesis Audio Feedback:** Real-time Web Speech API audio announcements when category buttons are tapped.
-- [x] **Instant Camera Capture:** Mobile-friendly camera file upload with photo preview and simulated Computer Vision defect tags.
-- [x] **5-Second Voice Note Recorder:** Touch-to-record voice note with animated speech waveform visualizer and simulated Whisper STT transcript.
+- [x] **Instant Camera & WebRTC Viewfinder:** Mobile camera capture with live viewfinder stream, gallery file picker, and mandatory photo verification.
+- [x] **Multimodal AI Computer Vision Engine:** Integrated `src/lib/geminiVision.ts` with direct Google Gemini 1.5 Flash multimodal vision API and edge defect fallback.
+- [x] **Smart Duplicate Clustering (Fixed & Verified):** Clusters all active unresolved incident reports on the same spot, increments `duplicate_count` (+N badge), escalates AI severity, and updates Supabase.
 - [x] **Public Spot Status Progress Badge:** 3-step lifecycle tracker `[Report Submitted ➔ Technician Dispatched ➔ Issue Resolved]` with maintenance fixed photo proof display.
-- [x] **Smart 30-Minute Duplicate Clustering:** Automatically aggregates reports at the same `location_id` within a 30-minute window into an impact counter (`duplicate_count`).
 - [x] **AI Urgency Scoring Algorithm:** Dynamic calculation based on defect severity, lecture hours proximity, duplicate weights, and multi-media evidence bonuses.
 - [x] **Live Spatial Campus Floor Map:** Interactive SVG floor map with floor selector (Floor 1, Floor 2, Floor 3) and color-coded status pins (🔴 Red, 🟡 Yellow, 🟢 Green).
 - [x] **One-Click WhatsApp/SMS Work Order Dispatch:** Generates pre-formatted WhatsApp job links (`https://wa.me/...`) with complete location and defect details.
@@ -54,6 +54,8 @@
 - None currently blocking. If the Supabase database migration (`supabase_schema.sql`) hasn't been executed yet in the Supabase SQL Editor, queries fall back safely to responsive local state and alert with an actionable warning.
 
 ### Issues Resolved
+- [x] **Resolved:** Duplicate report identification fixed: Modified `useIncidents.ts` to detect and cluster any active unresolved incident reports on the same spot without getting blocked by elapsed timestamp offsets.
+- [x] **Resolved:** Real Google Gemini Multimodal Vision integrated: Created `src/lib/geminiVision.ts` supporting Google Gemini 1.5 Flash multimodal vision API with dynamic key entry modal, `.env` support, and edge defect fallback.
 - [x] **Resolved:** Camera Access & Mandatory Photo Proof: Added live WebRTC camera viewfinder with device stream snapshot, file picker fallback, and desktop test photo selector. Strictly enforced mandatory photo upload (submit button is disabled and displays a prominent warning until photo is attached).
 - [x] **Resolved:** Removed voice-to-text recording: Deprecated client-side speech-to-text to prevent browser microphone permission failures on LAN IP origins, maintaining 100% pictographic ease of use for custodial staff (*aayas*).
 - [x] **Resolved:** Fixed `ERROR: 42710: policy "Allow public uploads to incident-media" already exists` in `supabase_schema.sql` by adding `DROP POLICY IF EXISTS` and wrapping `ALTER PUBLICATION` in an idempotent `DO $$` block.

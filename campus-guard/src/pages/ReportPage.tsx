@@ -14,6 +14,8 @@ import {
   X,
   Upload,
   RefreshCw,
+  Key,
+  Layers,
   Image as ImageIcon,
 } from 'lucide-react';
 import {
@@ -24,6 +26,12 @@ import {
   CampusLocation,
 } from '../types';
 import { useIncidents } from '../hooks/useIncidents';
+import {
+  analyzeImageDefects,
+  getGeminiApiKey,
+  saveGeminiApiKey,
+  VisionAnalysisResult,
+} from '../lib/geminiVision';
 
 export const ReportPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,6 +52,10 @@ export const ReportPage: React.FC = () => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isAnalyzingCV, setIsAnalyzingCV] = useState(false);
   const [cvTags, setCvTags] = useState<string[]>([]);
+  const [visionResult, setVisionResult] = useState<VisionAnalysisResult | null>(null);
+  const [hasGeminiKey, setHasGeminiKey] = useState<boolean>(() => Boolean(getGeminiApiKey()));
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPhotoError, setShowPhotoError] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<{
@@ -78,23 +90,38 @@ export const ReportPage: React.FC = () => {
     playAudioFeedback(CATEGORY_META[cat].audioText);
   };
 
-  // Process captured/selected image and simulate AI Computer Vision defect detection
-  const processCapturedImage = (dataUrl: string) => {
+  // Process captured/selected image and analyze with Gemini Vision / Edge Engine
+  const processCapturedImage = async (dataUrl: string) => {
     setPhotoPreview(dataUrl);
     setShowPhotoError(false);
     setIsAnalyzingCV(true);
 
-    setTimeout(() => {
+    try {
+      const analysis = await analyzeImageDefects(dataUrl, selectedCategory);
+      setCvTags(analysis.tags);
+      setVisionResult(analysis);
+      playAudioFeedback(
+        analysis.isRealAI
+          ? 'Photo analyzed by Google Gemini Vision. Defect identified.'
+          : 'Photo captured and defect detected.'
+      );
+    } catch (err) {
+      console.error('Vision analysis failure:', err);
+      setCvTags(['defect_detected', 'urgent_inspection']);
+    } finally {
       setIsAnalyzingCV(false);
-      const autoTags: Record<IncidentCategory, string[]> = {
-        WATER_SUPPLY: ['water_leakage', 'pipe_rupture', 'standing_fluid'],
-        LIGHTS_FAN_PROJECTOR: ['electrical_fixture', 'spark_hazard', 'fan_blade_jammed'],
-        WASHROOM_CLEANLINESS: ['surface_stains', 'waste_accumulation', 'odor_risk'],
-        FURNITURE_MAINTENANCE: ['broken_timber', 'bracket_shear', 'wobble_hazard'],
-      };
-      setCvTags(autoTags[selectedCategory] || ['defect_detected']);
-      playAudioFeedback('Photo captured and defect detected.');
-    }, 1000);
+    }
+  };
+
+  const handleSaveGeminiKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveGeminiApiKey(geminiKeyInput);
+    setHasGeminiKey(Boolean(getGeminiApiKey()));
+    setShowKeyModal(false);
+    // If photo already exists, re-analyze with the new key!
+    if (photoPreview) {
+      processCapturedImage(photoPreview);
+    }
   };
 
   // Open Live Device Camera Viewfinder
@@ -282,26 +309,53 @@ export const ReportPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Discreet Principal / Admin Portal Link (Constraint 3) */}
-        <button
-          onClick={() => navigate('/admin/login')}
-          style={{
-            background: '#F1F5F9',
-            border: '1px solid #CBD5E1',
-            borderRadius: 20,
-            padding: '5px 12px',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            color: '#475569',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-          }}
-        >
-          <span>Admin Portal</span>
-          <ChevronRight size={14} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Gemini AI Key Status Pill */}
+          <button
+            type="button"
+            onClick={() => {
+              setGeminiKeyInput(getGeminiApiKey() || '');
+              setShowKeyModal(true);
+            }}
+            style={{
+              background: hasGeminiKey ? '#ECFDF5' : '#FFFBEB',
+              border: `1px solid ${hasGeminiKey ? '#A7F3D0' : '#FDE68A'}`,
+              borderRadius: 20,
+              padding: '5px 10px',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              color: hasGeminiKey ? '#065F46' : '#92400E',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+          >
+            <Sparkles size={13} color={hasGeminiKey ? '#10B981' : '#D97706'} />
+            <span>{hasGeminiKey ? 'Gemini 1.5 Active' : 'Connect AI Key'}</span>
+          </button>
+
+          {/* Discreet Principal / Admin Portal Link (Constraint 3) */}
+          <button
+            onClick={() => navigate('/admin/login')}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #CBD5E1',
+              borderRadius: 20,
+              padding: '5px 12px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              color: '#475569',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+          >
+            <span>Admin Portal</span>
+            <ChevronRight size={14} />
+          </button>
+        </div>
       </header>
 
       {/* Main Container */}
@@ -541,12 +595,19 @@ export const ReportPage: React.FC = () => {
               <Check size={28} strokeWidth={3} />
             </div>
 
+            {submittedResult.isDuplicate && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', padding: '4px 12px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 800, marginBottom: 8 }}>
+                <Layers size={14} />
+                <span>SMART DUPLICATE DETECTED (+{submittedResult.ticket.duplicate_count} Reports Clustered)</span>
+              </div>
+            )}
+
             <h3 style={{ fontSize: '1.2rem', fontWeight: 900, color: '#065F46' }}>
               {submittedResult.isDuplicate ? 'Report Clustered & Escalated!' : 'Issue Successfully Reported!'}
             </h3>
             <p style={{ fontSize: '0.825rem', color: '#047857', marginTop: 4 }}>
               {submittedResult.isDuplicate
-                ? `Impact increased! Total ${submittedResult.ticket.duplicate_count} reports on this spot. Severity: ${submittedResult.ticket.ai_severity_score}/100.`
+                ? `Active issue clustered! Total ${submittedResult.ticket.duplicate_count} students/staff reported this spot. Escalated to Priority ${submittedResult.ticket.ai_severity_score}/100.`
                 : 'Directly routed to Facilities Administration. Maintenance team alerted.'}
             </p>
 
@@ -884,16 +945,32 @@ export const ReportPage: React.FC = () => {
                   style={{ width: 72, height: 72, borderRadius: 10, objectFit: 'cover', border: '1px solid #CBD5E1' }}
                 />
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Sparkles size={14} color="#0288D1" />
-                      <span>AI Computer Vision Defect Tags</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 900, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Sparkles size={14} color="#0288D1" />
+                        AI Defect Vision
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.62rem',
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          fontWeight: 800,
+                          background: visionResult?.isRealAI ? '#ECFDF5' : '#F1F5F9',
+                          color: visionResult?.isRealAI ? '#059669' : '#64748B',
+                          border: `1px solid ${visionResult?.isRealAI ? '#A7F3D0' : '#CBD5E1'}`,
+                        }}
+                      >
+                        {visionResult?.isRealAI ? 'Google Gemini 1.5 Flash' : 'Edge Defect Engine'}
+                      </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => {
                         setPhotoPreview(null);
                         setCvTags([]);
+                        setVisionResult(null);
                       }}
                       style={{
                         background: 'transparent',
@@ -909,27 +986,35 @@ export const ReportPage: React.FC = () => {
                   </div>
 
                   {isAnalyzingCV ? (
-                    <div style={{ fontSize: '0.72rem', color: '#0288D1', fontWeight: 600, marginTop: 4 }}>
-                      Analyzing image with Computer Vision...
+                    <div style={{ fontSize: '0.75rem', color: '#0288D1', fontWeight: 600, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Inspecting image with Computer Vision...</span>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                      {cvTags.map((tag) => (
-                        <span
-                          key={tag}
-                          style={{
-                            fontSize: '0.68rem',
-                            background: '#E0F2FE',
-                            color: '#0369A1',
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            fontWeight: 700,
-                          }}
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
+                    <>
+                      {visionResult?.summary && (
+                        <div style={{ fontSize: '0.72rem', color: '#334155', fontWeight: 600, marginBottom: 6, fontStyle: 'italic', lineHeight: 1.3 }}>
+                          "{visionResult.summary}"
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {cvTags.map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              fontSize: '0.68rem',
+                              background: '#E0F2FE',
+                              color: '#0369A1',
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              fontWeight: 700,
+                            }}
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -996,6 +1081,118 @@ export const ReportPage: React.FC = () => {
             )}
           </button>
         </form>
+
+        {/* Gemini API Key Configuration Modal */}
+        {showKeyModal && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.75)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 100,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+          >
+            <div
+              style={{
+                background: 'white',
+                borderRadius: 20,
+                padding: 24,
+                maxWidth: 440,
+                width: '100%',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#0288D1', fontWeight: 900, fontSize: '1.05rem' }}>
+                  <Sparkles size={20} />
+                  <span>Google Gemini Vision API Key</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowKeyModal(false)}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.82rem', color: '#64748B', lineHeight: 1.4, marginBottom: 14 }}>
+                Enter your Google Gemini API key to activate live multimodal AI defect detection directly on photos taken by students and staff.
+              </p>
+
+              <form onSubmit={handleSaveGeminiKey}>
+                <input
+                  type="password"
+                  placeholder="AIzaSy..."
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    border: '1.5px solid #CBD5E1',
+                    fontSize: '0.85rem',
+                    fontFamily: 'monospace',
+                    marginBottom: 14,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="submit"
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      borderRadius: 10,
+                      background: 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
+                      color: 'white',
+                      border: 'none',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Save & Activate Live AI
+                  </button>
+                  {hasGeminiKey && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        saveGeminiApiKey('');
+                        setHasGeminiKey(false);
+                        setGeminiKeyInput('');
+                        setShowKeyModal(false);
+                      }}
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: 10,
+                        background: '#FEE2E2',
+                        color: '#B91C1C',
+                        border: 'none',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Clear Key
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ marginTop: 12, fontSize: '0.72rem', color: '#94A3B8', textAlign: 'center' }}>
+                  You can also permanently set <code>VITE_GEMINI_API_KEY</code> in <code>campus-guard/.env</code>.
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

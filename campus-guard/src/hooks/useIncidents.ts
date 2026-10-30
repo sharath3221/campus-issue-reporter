@@ -135,6 +135,8 @@ export function useIncidents() {
                       status: updated.status,
                       duplicate_count: Number(updated.duplicate_count || t.duplicate_count),
                       ai_severity_score: Number(updated.ai_severity_score || t.ai_severity_score),
+                      user_photo_url: updated.user_photo_url || t.user_photo_url,
+                      ai_vision_tags: updated.ai_vision_tags || t.ai_vision_tags,
                       assigned_staff_id: updated.assigned_staff_id || t.assigned_staff_id,
                       assigned_staff:
                         maintenanceStaff.find((s) => s.staff_id === updated.assigned_staff_id) ||
@@ -221,23 +223,35 @@ export function useIncidents() {
         gps_longitude: 74.6012,
       };
 
-      // Check for existing active ticket at same location within 30 minutes
-      const existingIndex = tickets.findIndex(
+      // Check for existing active ticket at same location that is currently unresolved
+      // Priority 1: Same location and same category (exact duplicate)
+      let existingIndex = tickets.findIndex(
         (t) =>
           t.location_id === locationId &&
           t.status !== 'RESOLVED' &&
-          Date.now() - new Date(t.reported_at).getTime() < 30 * 60 * 1000
+          t.category === category
       );
+
+      // Priority 2: Same location with any active unresolved defect
+      if (existingIndex === -1) {
+        existingIndex = tickets.findIndex(
+          (t) => t.location_id === locationId && t.status !== 'RESOLVED'
+        );
+      }
 
       if (existingIndex !== -1) {
         // Smart duplicate clustering
         const existing = tickets[existingIndex];
-        const newDupCount = existing.duplicate_count + 1;
+        const newDupCount = (existing.duplicate_count || 1) + 1;
         const updatedSeverity = calculateAISeverity(
           existing.category,
           newDupCount,
           !!(existing.voice_transcript || voiceTranscript),
           !!(existing.user_photo_url || userPhotoUrl)
+        );
+
+        console.log(
+          `⚡ Clustering duplicate incident at ${locationId}: Previous count=${existing.duplicate_count}, New count=${newDupCount}, Severity=${updatedSeverity}`
         );
 
         const updatedTicket: IncidentTicket = {
@@ -246,7 +260,7 @@ export function useIncidents() {
           ai_severity_score: updatedSeverity,
           voice_transcript: voiceTranscript || existing.voice_transcript,
           user_photo_url: userPhotoUrl || existing.user_photo_url,
-          ai_vision_tags: Array.from(new Set([...existing.ai_vision_tags, ...aiVisionTags])),
+          ai_vision_tags: Array.from(new Set([...(existing.ai_vision_tags || []), ...aiVisionTags])),
         };
 
         setTickets((prev) => {
