@@ -195,4 +195,5 @@ flowchart TD
 - **Styling Architecture:** High-contrast, mobile-friendly design tokens using CSS Custom Properties. Avoid inline random hexes where design tokens exist.
 - **Security Rule:** Never commit secrets, API keys, service role tokens, or sensitive credentials into Git or Markdown files. Use `.env` with `.env.example` templates.
 - **Defensive Fallback:** If cloud connections fail or are unconfigured, application must function cleanly via local storage and mock data without breaking user experience.
+- **Dev Server Convention:** Do NOT pass `--host` by default when starting Vite. Run standard `npx vite` strictly on `localhost` unless the user explicitly requests phone or LAN testing.
 

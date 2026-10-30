@@ -51,10 +51,10 @@
 # Navigate to web application directory
 cd /Users/sharath/Projects/bootcamp/campus-guard
 
-# Run development server with local network access
-npm run dev -- --host
+# Run development server on localhost (DO NOT pass --host unless requested)
+npm run dev
 # or
-npx vite --host
+npx vite
 
 # Build production bundle and verify TypeScript
 npm run build
@@ -82,6 +82,7 @@ git status
 3. Keep `PROJECT_CONTEXT.md`, `PROGRESS.md`, and `AI_HANDOVER.md` synchronized whenever changes are made.
 4. Maintain TypeScript strict typing without using `any`.
 5. Verify changes with `npm run build` inside `campus-guard/`.
+6. Do NOT pass `--host` by default to Vite. Always run standard `npx vite` strictly on localhost unless the user explicitly asks for network/phone access.
 
 ---
 
