@@ -3,19 +3,18 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   MapPin,
   Camera,
-  Mic,
   CheckCircle2,
   Clock,
   Sparkles,
   Volume2,
-  RotateCcw,
   Check,
   Shield,
-  Layers,
-  ArrowRight,
   ChevronRight,
-  Eye,
   AlertCircle,
+  X,
+  Upload,
+  RefreshCw,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   IncidentCategory,
@@ -42,20 +41,22 @@ export const ReportPage: React.FC = () => {
   // Form State (Zero-Login)
   const [selectedCategory, setSelectedCategory] =
     useState<IncidentCategory>('WATER_SUPPLY');
-  const [isRecording, setIsRecording] = useState(false);
-  const [voiceSeconds, setVoiceSeconds] = useState(0);
-  const [voiceTranscript, setVoiceTranscript] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isAnalyzingCV, setIsAnalyzingCV] = useState(false);
   const [cvTags, setCvTags] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPhotoError, setShowPhotoError] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<{
     ticket: IncidentTicket;
     isDuplicate: boolean;
   } | null>(null);
 
+  // Live Camera Stream State
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const timerRef = useRef<any>(null);
 
   // Audio speech synthesis feedback when tapping category buttons
   const playAudioFeedback = (text: string) => {
@@ -77,87 +78,140 @@ export const ReportPage: React.FC = () => {
     playAudioFeedback(CATEGORY_META[cat].audioText);
   };
 
-  // 5-second voice recording simulation with waveform visualizer
-  const startRecording = () => {
-    if (isRecording) {
-      clearInterval(timerRef.current);
-      setIsRecording(false);
-      return;
-    }
+  // Process captured/selected image and simulate AI Computer Vision defect detection
+  const processCapturedImage = (dataUrl: string) => {
+    setPhotoPreview(dataUrl);
+    setShowPhotoError(false);
+    setIsAnalyzingCV(true);
 
-    setIsRecording(true);
-    setVoiceSeconds(0);
-    playAudioFeedback('Recording voice note. Bolna shuru kijiye.');
-
-    let count = 0;
-    timerRef.current = setInterval(() => {
-      count += 1;
-      setVoiceSeconds(count);
-      if (count >= 5) {
-        clearInterval(timerRef.current);
-        setIsRecording(false);
-        // Simulated Speech-to-Text output based on selected category
-        const transcripts: Record<IncidentCategory, string> = {
-          WATER_SUPPLY:
-            'Paani leak ho raha hai aur tap se overflow chal raha hai yahan par.',
-          LIGHTS_FAN_PROJECTOR:
-            'Light band hai aur fan chal nahi raha hai, class me dikkat ho rahi hai.',
-          WASHROOM_CLEANLINESS:
-            'Washroom bahut dirty hai, safai ki sakht zaroorat hai.',
-          FURNITURE_MAINTENANCE:
-            'Desk toota hua hai aur bench hil raha hai gir sakta hai.',
-        };
-        setVoiceTranscript(transcripts[selectedCategory]);
-        playAudioFeedback('Voice note recorded and transcribed.');
-      }
+    setTimeout(() => {
+      setIsAnalyzingCV(false);
+      const autoTags: Record<IncidentCategory, string[]> = {
+        WATER_SUPPLY: ['water_leakage', 'pipe_rupture', 'standing_fluid'],
+        LIGHTS_FAN_PROJECTOR: ['electrical_fixture', 'spark_hazard', 'fan_blade_jammed'],
+        WASHROOM_CLEANLINESS: ['surface_stains', 'waste_accumulation', 'odor_risk'],
+        FURNITURE_MAINTENANCE: ['broken_timber', 'bracket_shear', 'wobble_hazard'],
+      };
+      setCvTags(autoTags[selectedCategory] || ['defect_detected']);
+      playAudioFeedback('Photo captured and defect detected.');
     }, 1000);
   };
 
+  // Open Live Device Camera Viewfinder
+  const openCamera = async () => {
+    setCameraError(null);
+    setIsCameraOpen(true);
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera stream not supported in this browser environment. Use Upload Photo instead.');
+      }
+
+      let stream: MediaStream;
+      try {
+        // Try back/environment camera first (mobile)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+      } catch {
+        // Fallback to default camera (laptop/webcam)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(console.error);
+      }
+    } catch (err: any) {
+      console.warn('Camera access issue:', err);
+      setCameraError(err.message || 'Camera access denied or unavailable. Please use file upload below.');
+    }
+  };
+
+  // Snap frame from active video stream
+  const snapPhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      processCapturedImage(dataUrl);
+    }
+    closeCamera();
+  };
+
+  // Close Camera Stream
+  const closeCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+    setIsCameraOpen(false);
+    setCameraError(null);
+  };
+
+  // Cleanup camera stream on unmount
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
     };
   }, []);
 
-  // Instant Camera Image Upload & Computer Vision simulation
-  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File Input Handler (Mobile Camera / Gallery / Files)
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = () => {
-      setPhotoPreview(reader.result as string);
-      setIsAnalyzingCV(true);
-
-      // Simulate real-time Computer Vision defect tag generation
-      setTimeout(() => {
-        setIsAnalyzingCV(false);
-        const autoTags: Record<IncidentCategory, string[]> = {
-          WATER_SUPPLY: ['water_leakage', 'pipe_rupture', 'standing_fluid'],
-          LIGHTS_FAN_PROJECTOR: ['electrical_fixture', 'spark_hazard', 'fan_blade_jammed'],
-          WASHROOM_CLEANLINESS: ['surface_stains', 'waste_accumulation', 'odor_risk'],
-          FURNITURE_MAINTENANCE: ['broken_timber', 'bracket_shear', 'wobble_hazard'],
-        };
-        setCvTags(autoTags[selectedCategory] || ['defect_detected']);
-        playAudioFeedback('Photo captured and defect detected.');
-      }, 1200);
+      processCapturedImage(reader.result as string);
     };
     reader.readAsDataURL(file);
   };
 
-  // Submit Report
+  // Fast Sample Photo for Testing
+  const handleUseSamplePhoto = () => {
+    const samplePhotos: Record<IncidentCategory, string> = {
+      WATER_SUPPLY:
+        'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
+      LIGHTS_FAN_PROJECTOR:
+        'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=600&q=80',
+      WASHROOM_CLEANLINESS:
+        'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=600&q=80',
+      FURNITURE_MAINTENANCE:
+        'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=600&q=80',
+    };
+    processCapturedImage(samplePhotos[selectedCategory]);
+  };
+
+  // Submit Report (Enforce Mandatory Photo)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!photoPreview) {
+      setShowPhotoError(true);
+      playAudioFeedback('Photo is mandatory. Please capture or upload a photo first.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     setTimeout(() => {
       const result = submitReport({
         locationId: currentSpot.location_id,
         category: selectedCategory,
-        userPhotoUrl:
-          photoPreview ||
-          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-        voiceTranscript: voiceTranscript || undefined,
+        userPhotoUrl: photoPreview,
         aiVisionTags: cvTags,
       });
 
@@ -499,9 +553,9 @@ export const ReportPage: React.FC = () => {
             <button
               onClick={() => {
                 setSubmittedResult(null);
-                setVoiceTranscript(null);
                 setPhotoPreview(null);
                 setCvTags([]);
+                setShowPhotoError(false);
               }}
               style={{
                 marginTop: 12,
@@ -538,7 +592,7 @@ export const ReportPage: React.FC = () => {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <label style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F172A' }}>
-                Tap Issue Category / समस्या चुनें
+                1. Tap Issue Category / समस्या चुनें
               </label>
               <span style={{ fontSize: '0.72rem', color: '#0288D1', fontWeight: 700 }}>
                 Audio Guided 🔊
@@ -600,118 +654,263 @@ export const ReportPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: Multi-Media Capture (§2) */}
+          {/* Section 2: Photo Capture (Mandatory Proof) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <label style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F172A' }}>
-              Add Evidence (Photo / 5s Voice Note)
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F172A' }}>
+                2. Photo Proof / फोटो प्रमाण
+              </label>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  color: photoPreview ? '#059669' : '#DC2626',
+                  background: photoPreview ? '#ECFDF5' : '#FEF2F2',
+                  border: `1px solid ${photoPreview ? '#A7F3D0' : '#FECACA'}`,
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                }}
+              >
+                {photoPreview ? '✓ Photo Attached' : '* Photo Required'}
+              </span>
+            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {/* Instant Camera Capture Button */}
-              <div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  ref={fileInputRef}
-                  style={{ display: 'none' }}
-                  onChange={handlePhotoCapture}
-                />
+            {/* Hidden file input for file upload / camera fallback */}
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handlePhotoUpload}
+            />
+
+            {/* Interactive Live Camera Viewfinder Modal / Card */}
+            {isCameraOpen ? (
+              <div
+                style={{
+                  background: '#0F172A',
+                  borderRadius: 16,
+                  padding: 14,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  alignItems: 'center',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                }}
+              >
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ color: 'white', fontSize: '0.85rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Camera size={18} color="#38BDF8" />
+                    <span>Live Camera Viewfinder</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeCamera}
+                    style={{
+                      background: 'rgba(255,255,255,0.15)',
+                      border: 'none',
+                      color: 'white',
+                      borderRadius: 8,
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: '0.75rem',
+                    }}
+                  >
+                    <X size={14} />
+                    <span>Cancel</span>
+                  </button>
+                </div>
+
+                {cameraError ? (
+                  <div style={{ background: '#451A1A', border: '1px solid #7F1D1D', color: '#FCA5A5', padding: 12, borderRadius: 10, fontSize: '0.8rem', textAlign: 'center', width: '100%' }}>
+                    {cameraError}
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                          background: '#0288D1',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 6,
+                          padding: '6px 12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Choose File Instead
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <video
+                      ref={videoRef}
+                      playsInline
+                      autoPlay
+                      muted
+                      style={{
+                        width: '100%',
+                        height: 240,
+                        objectFit: 'cover',
+                        borderRadius: 12,
+                        background: '#1E293B',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                      <button
+                        type="button"
+                        onClick={snapPhoto}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          borderRadius: 12,
+                          background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                          color: 'white',
+                          border: 'none',
+                          fontSize: '0.9rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <Camera size={20} />
+                        <span>Snap Photo Now / फोटो खींचें</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              /* Capture Action Buttons */
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {/* Button 1: Live Camera Stream */}
+                <button
+                  type="button"
+                  onClick={openCamera}
+                  style={{
+                    padding: '14px 10px',
+                    borderRadius: 14,
+                    border: '2px solid #0288D1',
+                    background: '#F0F9FF',
+                    color: '#0288D1',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
+                  }}
+                >
+                  <Camera size={24} color="#0288D1" />
+                  <span>Open Camera 📸</span>
+                  <span style={{ fontSize: '0.65rem', color: '#0369A1', fontWeight: 600 }}>Use Device Camera</span>
+                </button>
+
+                {/* Button 2: Upload File or Gallery */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   style={{
-                    width: '100%',
-                    height: 90,
+                    padding: '14px 10px',
                     borderRadius: 14,
-                    border: '2px dashed #0288D1',
-                    background: photoPreview ? '#F0F9FF' : 'white',
+                    border: '2px dashed #94A3B8',
+                    background: '#F8FAFC',
+                    color: '#475569',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 6,
                     cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: '0.8rem',
                   }}
                 >
-                  <Camera size={26} color="#0288D1" />
-                  <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0288D1' }}>
-                    {photoPreview ? 'Retake Photo 📸' : 'Snap Photo 📸'}
-                  </span>
+                  <Upload size={24} color="#475569" />
+                  <span>Upload Photo 📁</span>
+                  <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600 }}>From Gallery / Files</span>
                 </button>
               </div>
+            )}
 
-              {/* 5-Second Voice Note Button with Waveform Visualizer */}
-              <div>
+            {/* Quick Demo Sample Photo Link (Helpful on Desktop without webcam) */}
+            {!photoPreview && !isCameraOpen && (
+              <div style={{ textAlign: 'center', marginTop: 2 }}>
                 <button
                   type="button"
-                  onClick={startRecording}
+                  onClick={handleUseSamplePhoto}
                   style={{
-                    width: '100%',
-                    height: 90,
-                    borderRadius: 14,
-                    border: isRecording ? '2px solid #EF4444' : '2px dashed #F59E0B',
-                    background: isRecording ? '#FEF2F2' : voiceTranscript ? '#FFFBEB' : 'white',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#0288D1',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
+                    textDecoration: 'underline',
                   }}
                 >
-                  <Mic size={26} color={isRecording ? '#EF4444' : '#D97706'} className={isRecording ? 'animate-pulse' : ''} />
-                  <span
-                    style={{
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      color: isRecording ? '#DC2626' : '#B45309',
-                    }}
-                  >
-                    {isRecording ? `Recording... ${5 - voiceSeconds}s` : voiceTranscript ? 'Voice Note Added 🎙️' : 'Voice Note 🎙️'}
-                  </span>
-
-                  {/* Waveform indicator while recording */}
-                  {isRecording && (
-                    <div style={{ display: 'flex', gap: 3, alignItems: 'center', height: 12 }}>
-                      <span style={{ width: 3, height: 8, background: '#EF4444', borderRadius: 2 }} className="animate-pulse" />
-                      <span style={{ width: 3, height: 14, background: '#EF4444', borderRadius: 2 }} className="animate-pulse" />
-                      <span style={{ width: 3, height: 10, background: '#EF4444', borderRadius: 2 }} className="animate-pulse" />
-                      <span style={{ width: 3, height: 16, background: '#EF4444', borderRadius: 2 }} className="animate-pulse" />
-                    </div>
-                  )}
+                  💡 Testing on desktop? Click here to use sample {CATEGORY_META[selectedCategory].label} photo
                 </button>
               </div>
-            </div>
+            )}
 
-            {/* Photo Preview & Computer Vision Defect Tags (§4) */}
+            {/* Photo Preview & Computer Vision Defect Tags */}
             {photoPreview && (
               <div
                 style={{
                   background: '#F8FAFC',
-                  borderRadius: 12,
-                  padding: 10,
-                  border: '1px solid #E2E8F0',
+                  borderRadius: 14,
+                  padding: 12,
+                  border: '1px solid #CBD5E1',
                   display: 'flex',
                   gap: 12,
                   alignItems: 'center',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 }}
               >
                 <img
                   src={photoPreview}
-                  alt="Capture Preview"
-                  style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }}
+                  alt="Captured Issue"
+                  style={{ width: 72, height: 72, borderRadius: 10, objectFit: 'cover', border: '1px solid #CBD5E1' }}
                 />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <Sparkles size={14} color="#0288D1" />
-                    <span>AI Computer Vision Engine</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Sparkles size={14} color="#0288D1" />
+                      <span>AI Computer Vision Defect Tags</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoPreview(null);
+                        setCvTags([]);
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#EF4444',
+                        cursor: 'pointer',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Remove
+                    </button>
                   </div>
+
                   {isAnalyzingCV ? (
                     <div style={{ fontSize: '0.72rem', color: '#0288D1', fontWeight: 600, marginTop: 4 }}>
-                      Detecting surface and equipment defects...
+                      Analyzing image with Computer Vision...
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
@@ -722,7 +921,7 @@ export const ReportPage: React.FC = () => {
                             fontSize: '0.68rem',
                             background: '#E0F2FE',
                             color: '#0369A1',
-                            padding: '1px 6px',
+                            padding: '2px 6px',
                             borderRadius: 4,
                             fontWeight: 700,
                           }}
@@ -736,54 +935,63 @@ export const ReportPage: React.FC = () => {
               </div>
             )}
 
-            {/* Voice Transcript Display */}
-            {voiceTranscript && (
+            {/* Error Message if User Tries to Submit Without Photo */}
+            {showPhotoError && !photoPreview && (
               <div
                 style={{
-                  background: '#FFFBEB',
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
                   borderRadius: 10,
                   padding: '10px 14px',
-                  border: '1px solid #FDE68A',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: '#B91C1C',
                   fontSize: '0.8rem',
-                  color: '#92400E',
+                  fontWeight: 700,
                 }}
               >
-                <div style={{ fontWeight: 800, fontSize: '0.72rem', color: '#B45309', marginBottom: 2 }}>
-                  WHISPER TRANSCRIPT (Speech-to-Text):
-                </div>
-                "{voiceTranscript}"
+                <AlertCircle size={18} />
+                <span>Photo proof is required before submission! Please snap or upload a photo.</span>
               </div>
             )}
           </div>
 
-          {/* Instant Submit Button */}
+          {/* Instant Submit Button (Disabled until Photo is provided) */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !photoPreview}
             style={{
               width: '100%',
               padding: '16px',
               borderRadius: 16,
               border: 'none',
-              background: 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
-              color: 'white',
+              background: !photoPreview
+                ? '#CBD5E1'
+                : 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
+              color: !photoPreview ? '#64748B' : 'white',
               fontSize: '1.05rem',
               fontWeight: 900,
-              cursor: 'pointer',
+              cursor: !photoPreview ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              boxShadow: '0 6px 20px rgba(2, 136, 209, 0.4)',
-              transition: 'transform 0.1s ease',
+              boxShadow: !photoPreview ? 'none' : '0 6px 20px rgba(2, 136, 209, 0.4)',
+              transition: 'all 0.15s ease',
             }}
           >
             {isSubmitting ? (
-              <span>Submitting to Maintenance...</span>
+              <span>Transmitting Incident to Administration...</span>
+            ) : !photoPreview ? (
+              <>
+                <Camera size={20} />
+                <span>Photo Required to Submit / फोटो अनिवार्य है</span>
+              </>
             ) : (
               <>
                 <span>Submit Spot Report / शिकायत दर्ज करें</span>
-                <ArrowRight size={20} />
+                <Check size={20} strokeWidth={3} />
               </>
             )}
           </button>
