@@ -11,6 +11,8 @@
 ## 1. Feature Implementation Status
 
 ### Completed & Verified Features
+- [x] **Mobile QR Scanning & Network Host Mode:** Configured Vite network host mode (`server: { host: true, port: 5173 }`) and integrated a Destination Host selector (`Wi-Fi Mobile IP`, `Production Domain`, `Localhost`) in `QRSpotGenerator.tsx` so physical mobile phone cameras can scan QR codes and immediately open the incident report page over Wi-Fi.
+- [x] **Auth Error Diagnostics & In-App Admin Registration:** Added in-app admin account creation mode (`signUpWithSupabase`) and actionable diagnostics for Google OAuth callback URIs and Supabase Site URL configuration.
 - [x] **Strict Authentication Enforced & Demo Admin Eliminated:** Completely eliminated demo admin accounts (`admin-001`, `admin-002`, `admin-003`), hardcoded `mockData.ts` admin array, sample SQL admin seeds, fake passkey generator bypasses, and unverified session fallbacks. The Admin Portal (`/admin/*`) now strictly validates live Supabase Auth credentials via Google OAuth or Supabase Auth email/password.
 - [x] **Vercel Production Deployment Configuration:** Configured root `package.json` build scripts and SPA rewrites (`vercel.json`) for seamless zero-config Vercel Git-linked deployments.
 - [x] **Supabase Authentication for Admin Portal:** Google Sign-In (`supabase.auth.signInWithOAuth`) and institutional password sign-in (`supabase.auth.signInWithPassword`), with live Supabase session persistence.
