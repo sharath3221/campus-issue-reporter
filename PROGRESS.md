@@ -26,6 +26,7 @@
 - [x] **One-Click WhatsApp/SMS Work Order Dispatch:** Generates pre-formatted WhatsApp job links (`https://wa.me/...`) with complete location and defect details.
 - [x] **Resolution Action with Fixed Photo Proof:** Admin modal to attach repair photo proof which immediately updates the public spot badge.
 - [x] **PostgreSQL / Supabase Schema (`supabase_schema.sql`):** 5-table schema with Row-Level Security (RLS) policies, Realtime publication, and seed data.
+- [x] **Live Supabase Database Connection Verified:** Verified live cloud queries on `fxpjftdtfsbsthucvdpm`: `campus_locations` (6 rows), `incident_tickets` (3 rows), `maintenance_staff` (4 rows) all return HTTP 200 OK.
 - [x] **Supabase Client SDK & Fallback:** `@supabase/supabase-js` integration in `src/lib/supabaseClient.ts` with hybrid offline fallback.
 - [x] **Supabase Credentials Configured:** `.env` updated with live project URL and anon public key.
 - [x] **Supabase MCP Server Configuration:** Configured in `~/.gemini/antigravity/mcp_config.json` (`project_ref=fxpjftdtfsbsthucvdpm`).
@@ -33,7 +34,6 @@
 - [x] **Git Repository Initialization:** Initialized git repo at project root with comprehensive `.gitignore`.
 
 ### Implemented but Untested in Live Cloud Environment
-- [ ] **Database Migration Execution in Supabase:** `supabase_schema.sql` ready to be executed in Supabase SQL Editor to populate tables and enable realtime publication.
 - [ ] **Physical Device QR Scanning:** Spot metadata URL parsing verified in browser; physical printed QR stickers pending real-world field test.
 
 ### Features Currently Under Development

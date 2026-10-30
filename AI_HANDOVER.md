@@ -88,16 +88,16 @@ git status
 ### START HERE — NEXT AI ASSISTANT
 
 **Project:** CampusPulse — Zero-Login AI Campus Facility & Incident Reporting System  
-**Current Status:** Production-ready web prototype running on Vite 6 with React 18, TypeScript, and Supabase integration. Build is completely green.  
-**Last Completed Task:** Added user Supabase credentials to `.env`, verified clean build, and launched Vite dev server with `--host`.  
-**Current Unfinished Task:** Run `supabase_schema.sql` in Supabase SQL Editor and test real-time incident flow between mobile phone and admin portal.  
+**Current Status:** Production-ready web application running on Vite 6 with React 18, TypeScript, and live Supabase PostgreSQL backend. Live database connectivity verified with HTTP 200 responses across all tables. Production build passes in ~1s.  
+**Last Completed Task:** Verified live Supabase database tables (`campus_locations`, `incident_tickets`, `maintenance_staff`), validated idempotent schema, and confirmed clean operation.  
+**Current Unfinished Task:** Mobile-first physical field test with camera uploads & regional audio prompt expansion.  
 **Relevant Files:**  
-- [`/Users/sharath/Projects/bootcamp/campus-guard/.env`](file:///Users/sharath/Projects/bootcamp/campus-guard/.env) (Environment variables)  
-- [`/Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql`](file:///Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql) (Database migration)  
+- [`/Users/sharath/Projects/bootcamp/campus-guard/.env`](file:///Users/sharath/Projects/bootcamp/campus-guard/.env) (Live Supabase credentials)  
+- [`/Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql`](file:///Users/sharath/Projects/bootcamp/campus-guard/supabase_schema.sql) (Idempotent database migration)  
 - [`/Users/sharath/Projects/bootcamp/campus-guard/src/lib/supabaseClient.ts`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/lib/supabaseClient.ts) (Supabase client)  
-- [`/Users/sharath/Projects/bootcamp/campus-guard/src/hooks/useIncidents.ts`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/hooks/useIncidents.ts) (State engine)  
-- [`/Users/sharath/Projects/bootcamp/campus-guard/src/pages/ReportPage.tsx`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/pages/ReportPage.tsx) (Public Reporter)  
-- [`/Users/sharath/Projects/bootcamp/campus-guard/src/pages/AdminDashboardPage.tsx`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/pages/AdminDashboardPage.tsx) (Admin Dashboard)  
+- [`/Users/sharath/Projects/bootcamp/campus-guard/src/hooks/useIncidents.ts`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/hooks/useIncidents.ts) (State engine & Realtime subscription)  
+- [`/Users/sharath/Projects/bootcamp/campus-guard/src/pages/ReportPage.tsx`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/pages/ReportPage.tsx) (Public Zero-Login Reporter)  
+- [`/Users/sharath/Projects/bootcamp/campus-guard/src/pages/AdminDashboardPage.tsx`](file:///Users/sharath/Projects/bootcamp/campus-guard/src/pages/AdminDashboardPage.tsx) (Admin Dashboard & Spatial Map)  
 
 **Next Action:** Verify database tables in Supabase SQL Editor, test live reporting on `/report`, and verify realtime sync on `/admin/dashboard`.  
 **Expected Result:** When real Supabase keys are active and schema is applied, tickets created on `/report` immediately write to Supabase table `incident_tickets` and trigger a live Realtime push update on `/admin/dashboard`.  
