@@ -36,7 +36,6 @@ import {
   STATUS_META,
 } from '../types';
 import { useIncidents } from '../hooks/useIncidents';
-import { QRSpotGenerator } from '../components/QRSpotGenerator';
 import { AdminStaffManager } from '../components/AdminStaffManager';
 import { AdminArchitectureManager } from '../components/AdminArchitectureManager';
 import { CampusFloorCanvas } from '../components/CampusFloorCanvas';
@@ -63,7 +62,7 @@ export const AdminDashboardPage: React.FC = () => {
   } = useIncidents();
 
   // Navigation tab
-  const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'ARCHITECTURE' | 'QR_STUDIO' | 'STAFF'>('OPERATIONS');
+  const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'ARCHITECTURE' | 'STAFF'>('OPERATIONS');
 
   // Admin Session Check (Strict Constraint 3 - Strictly Authenticated Sessions Only)
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
@@ -412,7 +411,7 @@ export const AdminDashboardPage: React.FC = () => {
           }}
         >
           <Compass size={16} />
-          <span>Campus Architecture</span>
+          <span>Campus Architecture & QR Codes</span>
           <span
             style={{
               background: '#0288D1',
@@ -424,40 +423,6 @@ export const AdminDashboardPage: React.FC = () => {
             }}
           >
             {campusBuildingNames.length} Bldgs • {campusLocations.length} Rms
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveNavTab('QR_STUDIO')}
-          style={{
-            padding: '12px 18px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: activeNavTab === 'QR_STUDIO' ? '3px solid #38BDF8' : '3px solid transparent',
-            color: activeNavTab === 'QR_STUDIO' ? '#38BDF8' : '#94A3B8',
-            fontWeight: 800,
-            fontSize: '0.85rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            flexShrink: 0,
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <QrCode size={16} />
-          <span>Spot QR Sticker Generator & Directory</span>
-          <span
-            style={{
-              background: '#0288D1',
-              color: 'white',
-              fontSize: '0.65rem',
-              padding: '2px 7px',
-              borderRadius: 10,
-              fontWeight: 800,
-            }}
-          >
-            {campusLocations.length}
           </span>
         </button>
 
@@ -508,11 +473,6 @@ export const AdminDashboardPage: React.FC = () => {
             onDeleteBuildingLocations={deleteCampusLocationsByBuilding}
             onDeleteFloorLocations={deleteCampusLocationsByFloor}
             onUpdateLocationCoords={updateLocationCoords}
-          />
-        ) : activeNavTab === 'QR_STUDIO' ? (
-          <QRSpotGenerator
-            campusLocations={campusLocations}
-            onAddLocation={addCampusLocation}
           />
         ) : activeNavTab === 'STAFF' ? (
           <AdminStaffManager
