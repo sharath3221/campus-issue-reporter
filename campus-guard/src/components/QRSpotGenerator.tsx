@@ -27,6 +27,9 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
   campusLocations,
   onAddLocation,
 }) => {
+  // Mode: FLOOR (1 unique QR per floor - recommended) vs SPOT (1 QR per fixture/room)
+  const [qrMode, setQrMode] = useState<'FLOOR' | 'SPOT'>('FLOOR');
+
   // Form State
   const [buildingOption, setBuildingOption] = useState<string>('Engineering Block A');
   const [customBuilding, setCustomBuilding] = useState<string>('');
@@ -36,8 +39,15 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     useState<CampusLocation['zone_category']>('CLASSROOM');
   const [fixtureId, setFixtureId] = useState<string>('FAN-01');
 
+  // Custom Domain Setting (Persisted)
+  const [customDomain, setCustomDomain] = useState<string>(() => {
+    return localStorage.getItem('campuspulse_custom_prod_domain') || '';
+  });
+  const [showDomainEdit, setShowDomainEdit] = useState(false);
+
   // Target Domain: Auto-detects production origin or defaults to live Vercel URL
   const effectiveDomain = (() => {
+    if (customDomain.trim()) return customDomain.trim().replace(/\/$/, '');
     if (
       typeof window !== 'undefined' &&
       window.location.hostname !== 'localhost' &&
@@ -62,13 +72,20 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
   const effectiveBuilding =
     buildingOption === 'CUSTOM' ? (customBuilding.trim() || 'Academic Building') : buildingOption;
 
-  // Auto-generate standardized Location ID
+  // Auto-generate standardized Location ID for specific spot
   const generateLocationId = (bld: string, flr: number, rm: string, fix?: string) => {
     const cleanBld = bld.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
     const cleanRm = rm.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase();
     const cleanFix = fix ? '-' + fix.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase() : '';
     return `QR-${cleanBld}-FL${flr}-${cleanRm}${cleanFix}`;
   };
+
+  // Standardized Floor Station Code & URL
+  const cleanBldCode = effectiveBuilding.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
+  const floorStationCode = `QR-${cleanBldCode}-FL${floorNumber}`;
+  const floorReportUrl = `${effectiveDomain}/floor-report?bld=${encodeURIComponent(
+    effectiveBuilding
+  )}&flr=${floorNumber}&code=${floorStationCode}`;
 
   const activeSpot: CampusLocation = selectedSpotForPreview || {
     location_id: generateLocationId(effectiveBuilding, floorNumber, roomNumber, fixtureId),
@@ -83,20 +100,26 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     y_coord: 150,
   };
 
-  // Production Target reporting URL encoded in the QR sticker
-  const targetReportUrl = `${effectiveDomain}/report?loc=${encodeURIComponent(
+  // Spot reporting URL encoded in the spot sticker
+  const spotReportUrl = `${effectiveDomain}/report?loc=${encodeURIComponent(
     activeSpot.location_id
   )}`;
 
+  // Active Target URL based on mode
+  const activeTargetUrl = qrMode === 'FLOOR' ? floorReportUrl : spotReportUrl;
+
   // Direct test URL for local machine
-  const localDirectUrl = `${window.location.origin}/report?loc=${encodeURIComponent(
-    activeSpot.location_id
-  )}`;
+  const localDirectUrl =
+    qrMode === 'FLOOR'
+      ? `${window.location.origin}/floor-report?bld=${encodeURIComponent(
+          effectiveBuilding
+        )}&flr=${floorNumber}&code=${floorStationCode}`
+      : `${window.location.origin}/report?loc=${encodeURIComponent(activeSpot.location_id)}`;
 
   // Generate QR Code data URL whenever target URL changes (Production Standard: Pure Black on White, ErrorCorrection M)
   useEffect(() => {
     let isMounted = true;
-    QRCode.toDataURL(targetReportUrl, {
+    QRCode.toDataURL(activeTargetUrl, {
       width: 480,
       margin: 3,
       color: {
@@ -115,7 +138,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [targetReportUrl]);
+  }, [activeTargetUrl]);
 
   // Handle Save to Campus Database
   const handleSaveSpot = async (e: React.FormEvent) => {
@@ -162,14 +185,32 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 30px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('CampusPulse Spot QR', 300, 58);
+    ctx.fillText(
+      qrMode === 'FLOOR' ? 'CampusPulse Floor Station' : 'CampusPulse Spot QR',
+      300,
+      58
+    );
 
-    ctx.font = '600 16px system-ui, sans-serif';
+    ctx.font = '600 15px system-ui, sans-serif';
     ctx.fillStyle = '#E0F2FE';
-    ctx.fillText('SCAN WITH CAMERA TO REPORT FACILITY DEFECT', 300, 92);
+    ctx.fillText(
+      qrMode === 'FLOOR'
+        ? 'SCAN WITH CAMERA TO REPORT DEFECTS ON THIS FLOOR'
+        : 'SCAN WITH CAMERA TO REPORT FACILITY DEFECT',
+      300,
+      92
+    );
 
     // QR Image
     const img = new Image();
+    const isFloorMode = qrMode === 'FLOOR';
+    const floorLabel =
+      floorNumber === 0
+        ? 'Ground Floor'
+        : floorNumber < 0
+        ? `Basement ${Math.abs(floorNumber)}`
+        : `Floor ${floorNumber}`;
+
     img.onload = () => {
       ctx.drawImage(img, 110, 140, 380, 380);
 
@@ -185,38 +226,44 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
       ctx.fillStyle = '#0F172A';
       ctx.font = 'bold 22px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(activeSpot.building_name, 300, 580);
+      ctx.fillText(effectiveBuilding, 300, 580);
 
       ctx.fillStyle = '#475569';
       ctx.font = '600 18px system-ui, sans-serif';
       ctx.fillText(
-        `Floor ${activeSpot.floor_number} • Room / Area: ${activeSpot.room_number}`,
+        isFloorMode
+          ? `Station: ${floorLabel} (All Rooms)`
+          : `Floor ${activeSpot.floor_number} • Room: ${activeSpot.room_number}`,
         300,
         615
       );
 
       ctx.fillStyle = '#0288D1';
-      ctx.font = 'bold 16px monospace';
+      ctx.font = 'bold 15px system-ui, sans-serif';
       ctx.fillText(
-        `ZONE: ${activeSpot.zone_category} ${activeSpot.fixture_id ? `• FIXTURE: ${activeSpot.fixture_id}` : ''}`,
+        isFloorMode
+          ? '📱 Reporter specifies Room Number on screen'
+          : `ZONE: ${activeSpot.zone_category} ${activeSpot.fixture_id ? `• FIXTURE: ${activeSpot.fixture_id}` : ''}`,
         300,
         650
       );
 
       ctx.fillStyle = '#64748B';
-      ctx.font = '14px system-ui, sans-serif';
-      ctx.fillText(`Code: ${activeSpot.location_id}`, 300, 680);
+      ctx.font = '14px monospace';
+      ctx.fillText(`Code: ${isFloorMode ? floorStationCode : activeSpot.location_id}`, 300, 680);
 
       // Footer
       ctx.fillStyle = '#0288D1';
       ctx.font = 'bold 14px system-ui, sans-serif';
-      ctx.fillText('Zero-Login • Instant AI Severity • Maintenance Dispatched', 300, 740);
+      ctx.fillText('Zero-Login • Gemini AI Genuineness Verification • Quick Dispatch', 300, 740);
 
       // Trigger download
       const pngUrl = canvas.toDataURL('image/png');
       const downloadLink = document.createElement('a');
       downloadLink.href = pngUrl;
-      downloadLink.download = `CampusPulse-Sticker-${activeSpot.location_id}.png`;
+      downloadLink.download = isFloorMode
+        ? `CampusPulse-FloorStation-${floorStationCode}.png`
+        : `CampusPulse-Sticker-${activeSpot.location_id}.png`;
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
@@ -229,11 +276,21 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     const printWindow = window.open('', '_blank', 'width=700,height=900');
     if (!printWindow) return;
 
+    const isFloorMode = qrMode === 'FLOOR';
+    const floorLabel =
+      floorNumber === 0
+        ? 'Ground Floor'
+        : floorNumber < 0
+        ? `Basement ${Math.abs(floorNumber)}`
+        : `Floor ${floorNumber}`;
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Print CampusPulse Spot QR - ${activeSpot.location_id}</title>
+          <title>Print CampusPulse ${isFloorMode ? 'Floor Station QR' : 'Spot QR'} - ${
+            isFloorMode ? floorStationCode : activeSpot.location_id
+          }</title>
           <style>
             @page {
               size: 4in 6in;
@@ -265,7 +322,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
             }
             .header h1 {
               margin: 0;
-              font-size: 22px;
+              font-size: 21px;
               font-weight: 900;
               letter-spacing: -0.02em;
             }
@@ -324,20 +381,37 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
         <body>
           <div class="card">
             <div class="header">
-              <h1>CampusPulse Spot QR</h1>
-              <p>Scan to report water, electric, or hygiene defects</p>
+              <h1>${isFloorMode ? 'CampusPulse Floor Station' : 'CampusPulse Spot QR'}</h1>
+              <p>${
+                isFloorMode
+                  ? 'Scan to report any defect on this floor'
+                  : 'Scan to report water, electric, or hygiene defects'
+              }</p>
             </div>
             <div class="qr-wrap">
-              <img src="${qrDataUrl}" alt="Spot QR Code" />
+              <img src="${qrDataUrl}" alt="QR Code" />
             </div>
             <div class="info-box">
-              <div class="bld">${activeSpot.building_name}</div>
-              <div class="meta">Floor ${activeSpot.floor_number} • Room ${activeSpot.room_number} (${activeSpot.zone_category})</div>
-              ${activeSpot.fixture_id ? `<div class="meta" style="color:#0288D1">Fixture: ${activeSpot.fixture_id}</div>` : ''}
-              <div class="code">${activeSpot.location_id}</div>
+              <div class="bld">${effectiveBuilding}</div>
+              <div class="meta">${
+                isFloorMode
+                  ? `Station: ${floorLabel} (All Rooms on Floor)`
+                  : `Floor ${activeSpot.floor_number} • Room ${activeSpot.room_number} (${activeSpot.zone_category})`
+              }</div>
+              ${
+                !isFloorMode && activeSpot.fixture_id
+                  ? `<div class="meta" style="color:#0288D1">Fixture: ${activeSpot.fixture_id}</div>`
+                  : ''
+              }
+              ${
+                isFloorMode
+                  ? `<div style="font-size:12px;color:#0288D1;font-weight:700;margin-bottom:6px;">Reporter enters room number on phone screen</div>`
+                  : ''
+              }
+              <div class="code">${isFloorMode ? floorStationCode : activeSpot.location_id}</div>
             </div>
             <div class="footer">
-              Zero-Login • Instant AI Verification • Quick Dispatch
+              Zero-Login • Gemini AI Genuineness Verification • Quick Dispatch
             </div>
           </div>
           <script>
@@ -391,39 +465,178 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
         }}
       >
         <div style={{ marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: '#0288D1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                }}
+              >
+                <QrCode size={20} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.2 }}>
+                  Campus Spot & Floor QR Generator Studio
+                </h2>
+                <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: 2 }}>
+                  Create printable QR stickers for Buildings, Floors, Rooms, or Fixtures
+                </p>
+              </div>
+            </div>
+
+            {/* Target Production Domain Indicator */}
             <div
               style={{
-                width: 36,
-                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
                 borderRadius: 10,
-                background: '#0288D1',
+                padding: '6px 12px',
+                fontSize: '0.74rem',
+                color: '#166534',
+                fontWeight: 700,
+              }}
+            >
+              <Globe size={14} color="#16A34A" />
+              <span>Production Target: <b>{effectiveDomain}</b></span>
+              <button
+                type="button"
+                onClick={() => setShowDomainEdit(!showDomainEdit)}
+                style={{
+                  background: 'white',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 6,
+                  padding: '2px 6px',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  color: '#475569',
+                  cursor: 'pointer',
+                  marginLeft: 4,
+                }}
+              >
+                {showDomainEdit ? 'Close' : 'Edit Domain'}
+              </button>
+            </div>
+          </div>
+
+          {/* Optional Domain Customizer */}
+          {showDomainEdit && (
+            <div
+              style={{
+                marginTop: 12,
+                background: '#F8FAFC',
+                border: '1px solid #CBD5E1',
+                borderRadius: 10,
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#334155' }}>Custom Domain:</span>
+              <input
+                type="url"
+                placeholder="https://campus-issue-reporter.vercel.app"
+                value={customDomain}
+                onChange={(e) => {
+                  setCustomDomain(e.target.value);
+                  localStorage.setItem('campuspulse_custom_prod_domain', e.target.value);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  border: '1px solid #CBD5E1',
+                  fontSize: '0.78rem',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomDomain('');
+                  localStorage.removeItem('campuspulse_custom_prod_domain');
+                }}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  border: '1px solid #CBD5E1',
+                  background: 'white',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Reset Default
+              </button>
+            </div>
+          )}
+
+          {/* Mode Switcher Tabs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setQrMode('FLOOR');
+                setSelectedSpotForPreview(null);
+              }}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 12,
+                border: qrMode === 'FLOOR' ? '2px solid #0288D1' : '1.5px solid #E2E8F0',
+                background: qrMode === 'FLOOR' ? '#F0F9FF' : '#F8FAFC',
+                color: qrMode === 'FLOOR' ? '#0288D1' : '#64748B',
+                fontWeight: 800,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'white',
+                gap: 8,
+                boxShadow: qrMode === 'FLOOR' ? '0 2px 8px rgba(2, 136, 209, 0.2)' : 'none',
               }}
             >
-              <QrCode size={20} />
-            </div>
-            <div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.2 }}>
-                Campus Spot QR Generator Studio
-              </h2>
-              <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: 2 }}>
-                Create printable QR stickers for any Building, Floor, Room, or Fixture and register them in Supabase
-              </p>
-            </div>
+              <Building size={18} />
+              <span>🏢 Unique Floor Station QR (1 per Floor)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setQrMode('SPOT')}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 12,
+                border: qrMode === 'SPOT' ? '2px solid #0288D1' : '1.5px solid #E2E8F0',
+                background: qrMode === 'SPOT' ? '#F0F9FF' : '#F8FAFC',
+                color: qrMode === 'SPOT' ? '#0288D1' : '#64748B',
+                fontWeight: 800,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                boxShadow: qrMode === 'SPOT' ? '0 2px 8px rgba(2, 136, 209, 0.2)' : 'none',
+              }}
+            >
+              <MapPin size={18} />
+              <span>🎯 Specific Spot QR (1 per Fixture/Room)</span>
+            </button>
           </div>
         </div>
 
         {/* 2-Column Grid: Form (Left) vs Live High-Res Card Preview (Right) */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 24, alignItems: 'start' }}>
           {/* Left: Input Parameters */}
-          <form
-            onSubmit={handleSaveSpot}
-            style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Building Selection */}
             <div>
               <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
@@ -476,185 +689,258 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
               )}
             </div>
 
-            {/* Floor Number & Room Number */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
-                  2. Floor Number
-                </label>
-                <select
-                  value={floorNumber}
-                  onChange={(e) => {
-                    setFloorNumber(Number(e.target.value));
-                    setSelectedSpotForPreview(null);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    background: 'white',
-                  }}
-                >
-                  <option value={-1}>Basement (-1)</option>
-                  <option value={0}>Ground Floor (0)</option>
-                  <option value={1}>Floor 1</option>
-                  <option value={2}>Floor 2</option>
-                  <option value={3}>Floor 3</option>
-                  <option value={4}>Floor 4</option>
-                  <option value={5}>Floor 5</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
-                  3. Room / Hall / Area
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. LH-201, WASH-02, LAB-3"
-                  value={roomNumber}
-                  onChange={(e) => {
-                    setRoomNumber(e.target.value);
-                    setSelectedSpotForPreview(null);
-                  }}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '0.88rem',
-                    boxSizing: 'border-box',
-                    fontWeight: 700,
-                  }}
-                />
-              </div>
+            {/* Floor Number Selection */}
+            <div>
+              <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
+                2. Floor Number
+              </label>
+              <select
+                value={floorNumber}
+                onChange={(e) => {
+                  setFloorNumber(Number(e.target.value));
+                  setSelectedSpotForPreview(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  border: '1.5px solid #CBD5E1',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  background: 'white',
+                }}
+              >
+                <option value={-1}>Basement (-1)</option>
+                <option value={0}>Ground Floor (0)</option>
+                <option value={1}>Floor 1</option>
+                <option value={2}>Floor 2</option>
+                <option value={3}>Floor 3</option>
+                <option value={4}>Floor 4</option>
+                <option value={5}>Floor 5</option>
+              </select>
             </div>
 
-            {/* Zone Category & Fixture / Asset ID */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
-                  4. Zone Category
-                </label>
-                <select
-                  value={zoneCategory}
-                  onChange={(e) => {
-                    setZoneCategory(e.target.value as CampusLocation['zone_category']);
-                    setSelectedSpotForPreview(null);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    background: 'white',
-                  }}
-                >
-                  <option value="WASHROOM">Washroom / Restroom</option>
-                  <option value="CLASSROOM">Classroom / Lecture Hall</option>
-                  <option value="CORRIDOR">Corridor / Common Passage</option>
-                  <option value="FACULTY_ROOM">Faculty Office / Staff Room</option>
-                  <option value="LABORATORY">Practical Science Lab</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
-                  5. Specific Fixture ID (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. FAN-04, TAP-01, COOLER-02"
-                  value={fixtureId}
-                  onChange={(e) => {
-                    setFixtureId(e.target.value);
-                    setSelectedSpotForPreview(null);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '0.88rem',
-                    boxSizing: 'border-box',
-                    fontWeight: 600,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Computed Location ID Display */}
-            <div
-              style={{
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                borderRadius: 12,
-                padding: '12px 14px',
-              }}
-            >
-              <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>
-                Unique Spot Identifier:
-              </div>
+            {/* Mode-Specific Form Fields */}
+            {qrMode === 'FLOOR' ? (
+              /* FLOOR STATION DETAILS */
               <div
                 style={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.92rem',
-                  fontWeight: 900,
-                  color: '#0288D1',
-                  marginTop: 4,
-                  wordBreak: 'break-all',
+                  background: '#F0F9FF',
+                  border: '1.5px solid #BAE6FD',
+                  borderRadius: 14,
+                  padding: '14px 16px',
                 }}
               >
-                {activeSpot.location_id}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: 4 }}>
-                Target URL: {targetReportUrl}
-              </div>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0369A1', fontWeight: 800, fontSize: '0.84rem', marginBottom: 6 }}>
+                  <Building size={16} />
+                  <span>Unique Floor Station Specification</span>
+                </div>
+                <p style={{ fontSize: '0.76rem', color: '#0C4A6E', margin: '0 0 10px', lineHeight: 1.4 }}>
+                  Every floor has a unique placard (<b>{floorStationCode}</b>). When students or faculty scan this placard,
+                  they are taken directly to the <b>Floor Reporting Page</b> where they enter their room number, snap a defect photo,
+                  and Gemini AI verifies defect genuineness before submission.
+                </p>
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-              <button
-                type="submit"
-                disabled={isSaving}
-                style={{
-                  flex: 1,
-                  padding: '12px 16px',
-                  borderRadius: 12,
-                  border: 'none',
-                  background: savedSuccess ? '#10B981' : '#0288D1',
-                  color: 'white',
-                  fontWeight: 800,
-                  fontSize: '0.88rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  boxShadow: '0 4px 12px rgba(2, 136, 209, 0.3)',
-                  transition: 'background 0.2s',
-                }}
-              >
-                {savedSuccess ? (
-                  <>
-                    <Check size={18} strokeWidth={3} />
-                    <span>Saved to Supabase & Active!</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus size={18} />
-                    <span>{isSaving ? 'Registering Spot...' : 'Save & Register Spot'}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+                <div style={{ background: 'white', borderRadius: 10, padding: '10px 12px', border: '1px solid #BAE6FD' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700 }}>STATION PLACARD ID:</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '0.92rem', fontWeight: 900, color: '#0288D1', marginTop: 2 }}>
+                    {floorStationCode}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: 4 }}>
+                    Station Scope: <b>{effectiveBuilding}</b> • <b>{floorNumber === 0 ? 'Ground Floor' : `Floor ${floorNumber}`}</b>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPNG}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: 10,
+                      background: '#0288D1',
+                      color: 'white',
+                      border: 'none',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Download size={14} />
+                    <span>Download Floor PNG</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: 10,
+                      background: 'white',
+                      color: '#0F172A',
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Printer size={14} color="#0288D1" />
+                    <span>Print Floor Placard</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* SPOT-SPECIFIC FORM */
+              <form onSubmit={handleSaveSpot} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
+                      3. Room / Hall / Area
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. LH-201, WASH-02, LAB-3"
+                      value={roomNumber}
+                      onChange={(e) => {
+                        setRoomNumber(e.target.value);
+                        setSelectedSpotForPreview(null);
+                      }}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: '1.5px solid #CBD5E1',
+                        fontSize: '0.88rem',
+                        boxSizing: 'border-box',
+                        fontWeight: 700,
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
+                      4. Zone Category
+                    </label>
+                    <select
+                      value={zoneCategory}
+                      onChange={(e) => {
+                        setZoneCategory(e.target.value as CampusLocation['zone_category']);
+                        setSelectedSpotForPreview(null);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: '1.5px solid #CBD5E1',
+                        fontSize: '0.88rem',
+                        fontWeight: 600,
+                        background: 'white',
+                      }}
+                    >
+                      <option value="WASHROOM">Washroom / Restroom</option>
+                      <option value="CLASSROOM">Classroom / Lecture Hall</option>
+                      <option value="CORRIDOR">Corridor / Common Passage</option>
+                      <option value="FACULTY_ROOM">Faculty Office / Staff Room</option>
+                      <option value="LABORATORY">Practical Science Lab</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: 6 }}>
+                    5. Specific Fixture ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. FAN-04, TAP-01, COOLER-02"
+                    value={fixtureId}
+                    onChange={(e) => {
+                      setFixtureId(e.target.value);
+                      setSelectedSpotForPreview(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.88rem',
+                      boxSizing: 'border-box',
+                      fontWeight: 600,
+                    }}
+                  />
+                </div>
+
+                {/* Computed Location ID Display */}
+                <div
+                  style={{
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                  }}
+                >
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Unique Spot Identifier:
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: '0.92rem',
+                      fontWeight: 900,
+                      color: '#0288D1',
+                      marginTop: 4,
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {activeSpot.location_id}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    border: 'none',
+                    background: savedSuccess ? '#10B981' : '#0288D1',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    boxShadow: '0 4px 12px rgba(2, 136, 209, 0.3)',
+                  }}
+                >
+                  {savedSuccess ? (
+                    <>
+                      <Check size={18} strokeWidth={3} />
+                      <span>Saved to Supabase & Active!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={18} />
+                      <span>{isSaving ? 'Registering Spot...' : 'Save & Register Spot'}</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
 
           {/* Right: Printable Sticker Card Live Preview */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
@@ -695,7 +981,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                     textTransform: 'uppercase',
                   }}
                 >
-                  Facility Quick Report Spot
+                  {qrMode === 'FLOOR' ? 'Floor Reporting Station' : 'Facility Quick Report Spot'}
                 </div>
               </div>
 
@@ -704,7 +990,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
-                    alt="Campus Spot QR Code"
+                    alt="Campus QR Code"
                     style={{
                       width: 200,
                       height: 200,
@@ -746,7 +1032,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                 </div>
               </div>
 
-              {/* Spot Location Details Box */}
+              {/* Location Details Box */}
               <div
                 style={{
                   background: '#F8FAFC',
@@ -755,10 +1041,12 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                 }}
               >
                 <div style={{ fontSize: '1rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.2 }}>
-                  {activeSpot.building_name}
+                  {effectiveBuilding}
                 </div>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginTop: 3 }}>
-                  Floor {activeSpot.floor_number} • Room: {activeSpot.room_number}
+                  {qrMode === 'FLOOR'
+                    ? `Station: ${floorNumber === 0 ? 'Ground Floor' : `Floor ${floorNumber}`} (All Rooms)`
+                    : `Floor ${activeSpot.floor_number} • Room: ${activeSpot.room_number}`}
                 </div>
                 <div
                   style={{
@@ -769,7 +1057,9 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                     textTransform: 'uppercase',
                   }}
                 >
-                  {activeSpot.zone_category} {activeSpot.fixture_id ? `• ${activeSpot.fixture_id}` : ''}
+                  {qrMode === 'FLOOR'
+                    ? '📱 Reporter specifies room on mobile screen'
+                    : `${activeSpot.zone_category} ${activeSpot.fixture_id ? `• ${activeSpot.fixture_id}` : ''}`}
                 </div>
                 <div
                   style={{
@@ -784,7 +1074,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                     fontWeight: 700,
                   }}
                 >
-                  {activeSpot.location_id}
+                  {qrMode === 'FLOOR' ? floorStationCode : activeSpot.location_id}
                 </div>
               </div>
 
@@ -799,7 +1089,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                   borderTop: '1px solid #E2E8F0',
                 }}
               >
-                Direct AI Routing to Facilities Administration
+                Gemini AI Genuineness Verification • Facilities Administration
               </div>
             </div>
 
@@ -831,7 +1121,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                   fontSize: '0.68rem',
                 }}
               >
-                {targetReportUrl}
+                {activeTargetUrl}
               </span>
             </div>
 
@@ -860,12 +1150,12 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                 }}
               >
                 <ExternalLink size={15} />
-                <span>Open & Test Public Reporter</span>
+                <span>{qrMode === 'FLOOR' ? 'Open & Test Floor Reporter' : 'Open & Test Spot Reporter'}</span>
               </a>
 
-              {targetReportUrl !== localDirectUrl && (
+              {activeTargetUrl !== localDirectUrl && (
                 <a
-                  href={targetReportUrl}
+                  href={activeTargetUrl}
                   target="_blank"
                   rel="noreferrer"
                   style={{
@@ -900,9 +1190,9 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                   flex: 1,
                   padding: '10px',
                   borderRadius: 10,
-                  border: '1.5px solid #CBD5E1',
-                  background: 'white',
-                  color: '#0F172A',
+                  background: '#0288D1',
+                  color: 'white',
+                  border: 'none',
                   fontSize: '0.78rem',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -912,7 +1202,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                   gap: 6,
                 }}
               >
-                <Download size={15} color="#0288D1" />
+                <Download size={14} />
                 <span>Download PNG</span>
               </button>
 
@@ -935,8 +1225,8 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                   gap: 6,
                 }}
               >
-                <Printer size={15} color="#0288D1" />
-                <span>Print Sticker</span>
+                <Printer size={14} color="#0288D1" />
+                <span>Print Placard</span>
               </button>
             </div>
           </div>

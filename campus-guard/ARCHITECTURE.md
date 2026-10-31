@@ -130,13 +130,23 @@ flowchart TD
   - Automatic persistence of spatial coordinates (`x_coord`, `y_coord`) to Supabase and localStorage.
   - Interactive room inspection drawer with direct public report URL test links.
 - **One-Click WhatsApp Dispatch:** Generates pre-formatted work order messages with deep links to `/maintenance` and dispatches via Supabase Edge Function `dispatch-alert`.
-- **Spot QR Sticker Generator Studio:**
-  - Configurable parameters: Building Name, Floor, Room, Zone Category, Fixture ID.
-  - Generates high-definition QR codes encoding the direct report URL.
-  - Renders a 600×780 physical placard card with CampusPulse branding and scan instructions.
-  - Saves the spot directly to Supabase `campus_locations` table.
-  - Download PNG and 1-tap Print Sticker actions.
-  - Campus Spots Directory with search and floor filters.
+- **AI Defect Genuineness Verification & Rejection (`geminiVision.ts` & Edge Function):**
+  - Evaluates uploaded/camera photos via Google Gemini 2.5 Flash Vision for facility defect genuineness.
+  - Automatically identifies whether the image is a genuine educational campus defect (leakage, electrical damage, broken furniture, washroom cleanliness) vs non-genuine (selfies, human faces, memes, food, animals, random objects, blank/black screens).
+  - Non-genuine photos are strictly rejected with an explanatory red alert banner, audio announcement, and submission blocking.
+- **Dedicated Floor Reporting Page (`/floor-report` ➔ `FloorReportPage.tsx`):**
+  - Scanned from Floor Station QR placards.
+  - Locks Building and Floor automatically.
+  - Prompts reporter to input their specific Room Number or area (with quick selection chips from known rooms).
+  - Runs Gemini genuineness inspection before allowing submission.
+  - Upserts dynamic room locations to `campus_locations` and creates incident tickets with live 3-step progress tracking.
+- **Unique Floor Station & Spot QR Generator Studio (`QRSpotGenerator.tsx`):**
+  - Modes:
+    1. **🏢 Floor Station QR (1 per Floor):** Generates separate, unique QR codes for every building and floor (`QR-[BLD]-FL[X]`), directing users to `/floor-report`.
+    2. **🎯 Specific Spot QR (1 per Fixture/Room):** Granular placard for specific fixtures/rooms directing to `/report`.
+  - Configurable production target domain with automatic detection of live Vercel HTTPS URL.
+  - Renders 600×780 physical printable placards with download PNG and 1-tap print actions.
+  - Architecture Manager integration: 1-click `🖨️ Floor Station QR` button on every floor.
 
 ---
 

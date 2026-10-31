@@ -139,12 +139,17 @@ export const ReportPage: React.FC = () => {
     setPhotoPreview(dataUrl);
     setShowPhotoError(false);
     setIsAnalyzingCV(true);
+    setVisionResult(null);
 
     try {
       const analysis = await analyzeImageDefects(dataUrl, selectedCategory);
       setCvTags(analysis.tags);
       setVisionResult(analysis);
-      playAudioFeedback('Photo captured and defect tags identified.');
+      if (!analysis.isGenuine) {
+        playAudioFeedback('Report rejected. Photo does not appear to show a genuine campus facility defect. Please photograph the physical defect.');
+      } else {
+        playAudioFeedback('Photo captured and defect tags identified.');
+      }
     } catch (err) {
       console.error('Vision analysis failure:', err);
       setCvTags(['defect_detected', 'urgent_inspection']);
@@ -278,6 +283,12 @@ export const ReportPage: React.FC = () => {
     if (!photoPreview) {
       setShowPhotoError(true);
       playAudioFeedback('Photo is mandatory. Please capture or upload a photo first.');
+      return;
+    }
+
+    // Enforce Gemini Genuineness Verification
+    if (visionResult && !visionResult.isGenuine) {
+      playAudioFeedback('Submission blocked. Gemini AI determined this photo is not a genuine campus facility defect.');
       return;
     }
 
@@ -1009,6 +1020,72 @@ export const ReportPage: React.FC = () => {
               </div>
             )}
 
+            {/* GEMINI REJECTION ALERT CARD (IF NON-GENUINE PHOTO) */}
+            {visionResult && !visionResult.isGenuine && (
+              <div
+                style={{
+                  background: '#FEF2F2',
+                  border: '2px solid #EF4444',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  marginTop: 10,
+                  display: 'flex',
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: '#FEE2E2',
+                    color: '#DC2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertCircle size={20} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 900, color: '#991B1B', margin: '0 0 4px' }}>
+                    ❌ Report Rejected by AI Verification
+                  </h4>
+                  <p style={{ fontSize: '0.78rem', color: '#B91C1C', margin: '0 0 6px', lineHeight: 1.4 }}>
+                    {visionResult.rejectionReason ||
+                      'The uploaded photo does not appear to be a genuine campus facility defect. Memes, selfies, blank images, or unrelated objects cannot be submitted.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoPreview(null);
+                      setCvTags([]);
+                      setVisionResult(null);
+                      openCamera();
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      background: '#DC2626',
+                      color: 'white',
+                      border: 'none',
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      marginTop: 4,
+                    }}
+                  >
+                    <RefreshCw size={12} />
+                    Retake Defect Photo
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Error Message if User Tries to Submit Without Photo */}
             {showPhotoError && !photoPreview && (
               <div
@@ -1031,44 +1108,62 @@ export const ReportPage: React.FC = () => {
             )}
           </div>
 
-          {/* Instant Submit Button (Disabled until Photo is provided) */}
-          <button
-            type="submit"
-            disabled={isSubmitting || !photoPreview}
-            style={{
-              width: '100%',
-              padding: '16px',
-              borderRadius: 16,
-              border: 'none',
-              background: !photoPreview
-                ? '#CBD5E1'
-                : 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
-              color: !photoPreview ? '#64748B' : 'white',
-              fontSize: '1.05rem',
-              fontWeight: 900,
-              cursor: !photoPreview ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              boxShadow: !photoPreview ? 'none' : '0 6px 20px rgba(2, 136, 209, 0.4)',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {isSubmitting ? (
-              <span>Transmitting Incident to Administration...</span>
-            ) : !photoPreview ? (
-              <>
-                <Camera size={20} />
-                <span>Photo Required to Submit / फोटो अनिवार्य है</span>
-              </>
-            ) : (
-              <>
-                <span>Submit Spot Report / शिकायत दर्ज करें</span>
-                <Check size={20} strokeWidth={3} />
-              </>
-            )}
-          </button>
+          {/* Submission Button: Blocked if Rejected by Gemini */}
+          {visionResult && !visionResult.isGenuine ? (
+            <div
+              style={{
+                width: '100%',
+                padding: '16px',
+                borderRadius: 16,
+                background: '#FEE2E2',
+                color: '#991B1B',
+                border: '2px solid #F87171',
+                fontSize: '0.92rem',
+                fontWeight: 900,
+                textAlign: 'center',
+              }}
+            >
+              ❌ Submission Blocked — Photo Rejected as Non-Genuine
+            </div>
+          ) : (
+            <button
+              type="submit"
+              disabled={isSubmitting || !photoPreview}
+              style={{
+                width: '100%',
+                padding: '16px',
+                borderRadius: 16,
+                border: 'none',
+                background: !photoPreview
+                  ? '#CBD5E1'
+                  : 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
+                color: !photoPreview ? '#64748B' : 'white',
+                fontSize: '1.05rem',
+                fontWeight: 900,
+                cursor: !photoPreview ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                boxShadow: !photoPreview ? 'none' : '0 6px 20px rgba(2, 136, 209, 0.4)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isSubmitting ? (
+                <span>Transmitting Incident to Administration...</span>
+              ) : !photoPreview ? (
+                <>
+                  <Camera size={20} />
+                  <span>Photo Required to Submit / फोटो अनिवार्य है</span>
+                </>
+              ) : (
+                <>
+                  <span>Submit Spot Report / शिकायत दर्ज करें</span>
+                  <Check size={20} strokeWidth={3} />
+                </>
+              )}
+            </button>
+          )}
         </form>
       </main>
     </div>

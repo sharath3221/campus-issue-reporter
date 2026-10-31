@@ -2,6 +2,8 @@ import { IncidentCategory } from '../types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 export interface VisionAnalysisResult {
+  isGenuine: boolean;
+  rejectionReason?: string;
   tags: string[];
   severityScore: number;
   summary: string;
@@ -85,10 +87,10 @@ async function extractVisualFeatures(imageDataUrl: string): Promise<{
 }
 
 /**
- * Autonomous AI Computer Vision Engine
- * Analyzes uploaded or camera-snapped images automatically without requiring any user input or keys.
- * If VITE_GEMINI_API_KEY is configured on the backend/environment, it leverages Gemini Vision silently;
- * otherwise, it processes real visual pixel features (edges, color spectrum, defect density) in-browser.
+ * Autonomous AI Computer Vision Engine with Genuine Report Verification
+ * Uses Google Gemini 2.5 Flash Vision to inspect the photo for authenticity:
+ * - If genuine campus facility defect: returns verified defect tags and severity score.
+ * - If fake/unrelated/meme/selfie/spam: marks isGenuine = false and provides rejectionReason.
  */
 export async function analyzeImageDefects(
   imageDataUrl: string,
@@ -101,12 +103,17 @@ export async function analyzeImageDefects(
         body: { imageDataUrl, category },
       });
 
-      if (!error && data && Array.isArray(data.tags)) {
+      if (!error && data && (data.is_genuine !== undefined || Array.isArray(data.tags))) {
         console.log('⚡ Edge Function Vision result:', data);
+        const isGenuine = data.is_genuine !== false;
         return {
-          tags: data.tags,
-          severityScore: Number(data.severityScore) || 8.0,
-          summary: data.summary || 'Defect verified by Gemini 2.5 Flash via Supabase Edge Function.',
+          isGenuine,
+          rejectionReason: !isGenuine
+            ? data.rejection_reason || 'Image rejected: Not identified as a genuine campus facility defect.'
+            : undefined,
+          tags: Array.isArray(data.tags) ? data.tags : ['defect_detected'],
+          severityScore: Number(data.severityScore) || (isGenuine ? 8.0 : 1.0),
+          summary: data.summary || (isGenuine ? 'Defect verified by Gemini via Edge Function.' : 'Report rejected by AI.'),
           isRealAI: true,
           modelUsed: data.modelUsed || 'Google Gemini 2.5 Flash (Supabase Edge Function)',
         };
@@ -118,20 +125,28 @@ export async function analyzeImageDefects(
 
   const envKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  // 2. Direct client fallback (when running in local dev with VITE_GEMINI_API_KEY)
+  // 2. Direct client fallback (when running with VITE_GEMINI_API_KEY)
   if (envKey && typeof envKey === 'string' && envKey.trim().length > 20 && !envKey.includes('your-gemini')) {
     try {
       const [header, base64Data] = imageDataUrl.split(',');
       const mimeMatch = header.match(/:(.*?);/);
       const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
-      const prompt = `Analyze this college facility photo. Reporter category: ${category}.
-Identify physical defects visible in the image.
-Return ONLY JSON:
+      const prompt = `You are the AI verification and defect inspection authority for CampusPulse, a university facility incident reporting platform.
+Reporter Category: "${category}".
+Analyze the attached photo carefully.
+
+VERIFY GENUINENESS OF REPORT:
+- GENUINE CAMPUS DEFECTS INCLUDE: Leaking pipes, damaged taps, broken flush, flooded/unhygienic restrooms, damp walls, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
+- NOT GENUINE (MUST REJECT): Selfies, faces, personal portraits, memes, cartoons, screenshots of apps/phones, random unrelated objects (food, drinks, pets, animals, vehicles, clothes, shoes, personal gadgets), blank/black/white screens, completely blurred/unidentifiable surfaces without visible defect, or prank submissions.
+
+Return ONLY valid JSON matching this schema:
 {
+  "is_genuine": true or false,
+  "rejection_reason": "Specific clear reason if not genuine (or empty string if genuine)",
   "defect_tags": ["defect_tag_1", "defect_tag_2", "defect_tag_3"],
   "severity_score": 8.5,
-  "summary": "1-sentence defect diagnosis"
+  "summary": "1-sentence concise defect diagnosis or verification finding"
 }`;
 
       let response = await fetch(
@@ -186,12 +201,18 @@ Return ONLY JSON:
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (rawText) {
           const parsed = JSON.parse(rawText.replace(/```json\n?|```/g, '').trim());
+          const isGenuine = parsed.is_genuine !== false;
+
           return {
+            isGenuine,
+            rejectionReason: !isGenuine
+              ? parsed.rejection_reason || 'The uploaded photo was not identified as a genuine campus facility defect.'
+              : undefined,
             tags: Array.isArray(parsed.defect_tags)
               ? parsed.defect_tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
               : ['defect_detected', 'urgent_inspection'],
-            severityScore: Number(parsed.severity_score) || 8.0,
-            summary: parsed.summary || 'Defect verified by Gemini 2.5 Flash Vision.',
+            severityScore: Number(parsed.severity_score) || (isGenuine ? 8.0 : 1.0),
+            summary: parsed.summary || (isGenuine ? 'Defect verified by Gemini 2.5 Flash Vision.' : 'Report rejected by AI.'),
             isRealAI: true,
             modelUsed: 'Google Gemini 2.5 Flash Vision',
           };
@@ -202,9 +223,26 @@ Return ONLY JSON:
     }
   }
 
-  // 2. Autonomous Built-In Computer Vision Pipeline (Zero User Configuration)
+  // 3. Autonomous Built-In Computer Vision Pipeline (Zero Configuration Fallback)
   // Extracts actual image properties (luminance, edge density, color dominance)
   const features = await extractVisualFeatures(imageDataUrl);
+
+  // Check for blank, completely dark, or featureless images
+  const isBlankOrDark = features.brightness < 18 && features.edgeIntensity < 4;
+  const isCompletelyWhite = features.brightness > 242 && features.edgeIntensity < 4;
+  const isNoEdges = features.edgeIntensity < 2;
+
+  if (isBlankOrDark || isCompletelyWhite || isNoEdges) {
+    return {
+      isGenuine: false,
+      rejectionReason: 'Image appears blank, completely obscured, or lacking physical details. Please photograph the physical facility defect clearly.',
+      tags: ['blank_or_obscured_image', 'insufficient_details'],
+      severityScore: 1.0,
+      summary: 'Report rejected: Insufficient visual details to confirm facility defect.',
+      isRealAI: false,
+      modelUsed: 'CampusPulse Vision Validator',
+    };
+  }
 
   const defectCatalog: Record<IncidentCategory, {
     baseTags: string[];
@@ -257,11 +295,11 @@ Return ONLY JSON:
     tags.push(...def.darkTags.slice(0, 1));
   }
 
-  // Calculate dynamic severity score based on edge and color severity
   const severityBonus = Math.min(1.5, (features.edgeIntensity / 50) * 1.5);
   const finalSeverity = Math.min(9.8, Number((def.baseSeverity + severityBonus).toFixed(1)));
 
   return {
+    isGenuine: true,
     tags: Array.from(new Set(tags)).slice(0, 5),
     severityScore: finalSeverity,
     summary: def.summaryTemplate,

@@ -23,6 +23,7 @@ import {
   Sliders,
   Maximize2,
   LayoutGrid,
+  ExternalLink,
 } from 'lucide-react';
 import { CampusLocation, CampusBuildingConfig, IncidentTicket } from '../types';
 import { CampusFloorCanvas } from './CampusFloorCanvas';
@@ -108,6 +109,14 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [previewStickerLoc, setPreviewStickerLoc] = useState<CampusLocation | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  // Floor Station QR Modal State
+  const [previewFloorStation, setPreviewFloorStation] = useState<{
+    building_name: string;
+    floor_number: number;
+    station_code: string;
+  } | null>(null);
+  const [floorQrDataUrl, setFloorQrDataUrl] = useState<string>('');
 
   // Add Building Form
   const [newBldName, setNewBldName] = useState('');
@@ -203,7 +212,7 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
       : 'https://campus-issue-reporter.vercel.app'
   ).replace(/\/$/, '');
 
-  // Generate QR for Preview Modal
+  // Generate QR for Preview Modal (Spot Specific)
   useEffect(() => {
     if (!previewStickerLoc) return;
     const targetUrl = `${effectiveOrigin}/report?loc=${encodeURIComponent(
@@ -218,6 +227,23 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
       .then(setQrDataUrl)
       .catch(console.error);
   }, [previewStickerLoc, effectiveOrigin]);
+
+  // Generate QR for Floor Station Preview Modal
+  useEffect(() => {
+    if (!previewFloorStation) return;
+    const targetUrl = `${effectiveOrigin}/floor-report?bld=${encodeURIComponent(
+      previewFloorStation.building_name
+    )}&flr=${previewFloorStation.floor_number}&code=${previewFloorStation.station_code}`;
+
+    QRCode.toDataURL(targetUrl, {
+      width: 480,
+      margin: 3,
+      color: { dark: '#000000', light: '#FFFFFF' },
+      errorCorrectionLevel: 'M',
+    })
+      .then(setFloorQrDataUrl)
+      .catch(console.error);
+  }, [previewFloorStation, effectiveOrigin]);
 
   // -------------------------------------------------------------
   // ACTIONS: ADD BUILDING WITH TEMPLATE
@@ -1025,6 +1051,37 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
               <span>⚡ Batch Room Wizard</span>
             </button>
 
+            {/* 1-Click Floor Station QR Placard */}
+            <button
+              type="button"
+              onClick={() => {
+                const activeBld = buildings.find((b) => b.building_name === selectedBuildingName);
+                const bldCode = (activeBld?.building_code || selectedBuildingName.slice(0, 5)).toUpperCase();
+                const floorCode = `QR-${bldCode}-FL${selectedFloorNumber}`;
+                setPreviewFloorStation({
+                  building_name: selectedBuildingName,
+                  floor_number: selectedFloorNumber,
+                  station_code: floorCode,
+                });
+              }}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 10,
+                border: '1.5px solid #0288D1',
+                background: '#F0F9FF',
+                color: '#0288D1',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <QrCode size={15} color="#0288D1" />
+              <span>🖨️ Floor Station QR</span>
+            </button>
+
             {roomsOnFloor.length > 0 && (
               <button
                 type="button"
@@ -1044,7 +1101,7 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
                 }}
               >
                 <Printer size={15} color="#0288D1" />
-                <span>Print Floor Placards ({roomsOnFloor.length})</span>
+                <span>Print Room Placards ({roomsOnFloor.length})</span>
               </button>
             )}
           </div>
@@ -1903,6 +1960,231 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
                   const link = document.createElement('a');
                   link.href = qrDataUrl;
                   link.download = `QR-${previewStickerLoc.location_id}.png`;
+                  link.click();
+                }}
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: '1px solid #CBD5E1',
+                  background: 'white',
+                  color: '#0F172A',
+                  fontWeight: 800,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Download size={15} />
+                <span>Download PNG</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------- */}
+      {/* MODAL 6: FLOOR STATION QR PLACARD PREVIEW & PRINT */}
+      {/* ----------------------------------------------------------- */}
+      {previewFloorStation && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.7)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              maxWidth: 380,
+              width: '100%',
+              padding: 20,
+              textAlign: 'center',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button
+                onClick={() => setPreviewFloorStation(null)}
+                style={{ background: 'transparent', border: 'none', color: '#64748B', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Placard Card */}
+            <div
+              style={{
+                border: '3.5px solid #0288D1',
+                borderRadius: 16,
+                overflow: 'hidden',
+                background: 'white',
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
+                  color: 'white',
+                  padding: '14px 12px',
+                }}
+              >
+                <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>CampusPulse</div>
+                <div style={{ fontSize: '0.66rem', color: '#E0F2FE', fontWeight: 800, textTransform: 'uppercase', marginTop: 2 }}>
+                  Floor Reporting Station
+                </div>
+              </div>
+
+              <div style={{ padding: '16px 12px' }}>
+                {floorQrDataUrl ? (
+                  <img
+                    src={floorQrDataUrl}
+                    alt="Floor Station QR"
+                    style={{ width: 220, height: 220, margin: '0 auto', display: 'block' }}
+                  />
+                ) : (
+                  <div style={{ width: 220, height: 220, background: '#F1F5F9', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    Generating QR...
+                  </div>
+                )}
+                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0288D1', marginTop: 6 }}>
+                  📱 SCAN WITH ANY PHONE CAMERA
+                </div>
+                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>
+                  Reporter specifies room number upon scanning
+                </div>
+              </div>
+
+              <div style={{ background: '#F8FAFC', borderTop: '1.5px dashed #CBD5E1', padding: '12px 14px' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F172A' }}>
+                  {previewFloorStation.building_name}
+                </div>
+                <div style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 800, marginTop: 2 }}>
+                  {previewFloorStation.floor_number === 0
+                    ? 'Ground Floor Station'
+                    : previewFloorStation.floor_number < 0
+                    ? `Basement ${Math.abs(previewFloorStation.floor_number)} Station`
+                    : `Floor ${previewFloorStation.floor_number} Station`}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#0288D1', fontWeight: 700, marginTop: 4 }}>
+                  Floor-Wide Placard • Opens `/floor-report`
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: '0.64rem',
+                    background: '#E0F2FE',
+                    color: '#0369A1',
+                    padding: '3px 8px',
+                    borderRadius: 4,
+                    display: 'inline-block',
+                    marginTop: 6,
+                    fontWeight: 800,
+                  }}
+                >
+                  {previewFloorStation.station_code}
+                </div>
+              </div>
+            </div>
+
+            {/* Test Link */}
+            <div style={{ marginBottom: 12 }}>
+              <a
+                href={`${effectiveOrigin}/floor-report?bld=${encodeURIComponent(
+                  previewFloorStation.building_name
+                )}&flr=${previewFloorStation.floor_number}&code=${previewFloorStation.station_code}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  color: '#0288D1',
+                  fontSize: '0.74rem',
+                  fontWeight: 800,
+                  textDecoration: 'none',
+                }}
+              >
+                <ExternalLink size={13} />
+                <span>Test Floor Report Page in New Tab</span>
+              </a>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const printWin = window.open('', '_blank', 'width=650,height=750');
+                  if (!printWin) return;
+                  const floorLabel =
+                    previewFloorStation.floor_number === 0
+                      ? 'Ground Floor'
+                      : previewFloorStation.floor_number < 0
+                      ? `Basement ${Math.abs(previewFloorStation.floor_number)}`
+                      : `Floor ${previewFloorStation.floor_number}`;
+
+                  printWin.document.write(`
+                    <html>
+                      <head><title>Print Floor Station QR - ${previewFloorStation.station_code}</title></head>
+                      <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;">
+                        <div style="border:4px solid #0288D1;border-radius:18px;overflow:hidden;width:340px;text-align:center;">
+                          <div style="background:#0288D1;color:white;padding:14px;font-weight:900;font-size:20px;">
+                            CampusPulse Floor Station QR
+                          </div>
+                          <img src="${floorQrDataUrl}" style="width:230px;height:230px;display:block;margin:16px auto;" />
+                          <div style="background:#F8FAFC;border-top:2px dashed #CBD5E1;padding:14px;">
+                            <div style="font-size:20px;font-weight:900;color:#0F172A;">${previewFloorStation.building_name}</div>
+                            <div style="font-size:14px;font-weight:700;color:#475569;margin-top:4px;">${floorLabel} Station</div>
+                            <div style="font-size:12px;color:#0288D1;margin-top:6px;font-weight:700;">Reporter enters room number on mobile device</div>
+                            <div style="font-family:monospace;font-size:11px;color:#0369A1;margin-top:8px;background:#E0F2FE;padding:3px 8px;border-radius:4px;display:inline-block;">${previewFloorStation.station_code}</div>
+                          </div>
+                          <div style="background:#F1F5F9;padding:8px;font-size:10px;color:#64748B;font-weight:700;">
+                            Zero-Login • Gemini AI Genuineness Verification
+                          </div>
+                        </div>
+                        <script>window.onload = function() { window.print(); }</script>
+                      </body>
+                    </html>
+                  `);
+                  printWin.document.close();
+                }}
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: 'none',
+                  background: '#0288D1',
+                  color: 'white',
+                  fontWeight: 800,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Printer size={15} />
+                <span>Print Floor Placard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!floorQrDataUrl) return;
+                  const link = document.createElement('a');
+                  link.href = floorQrDataUrl;
+                  link.download = `FloorStation-${previewFloorStation.station_code}.png`;
                   link.click();
                 }}
                 style={{

@@ -43,14 +43,21 @@ Deno.serve(async (req: Request) => {
       base64Data = data;
     }
 
-    const prompt = `You are the AI inspection engine for CampusPulse (a university facility defect reporting system).
-Reporter Category: ${category}.
-Analyze this photo taken on campus. Detect all physical defects, hazards, leakages, or damage.
+    const prompt = `You are the AI verification and defect inspection authority for CampusPulse, a university facility incident reporting platform.
+Reporter Category: "${category}".
+Analyze the attached photo carefully.
+
+VERIFY GENUINENESS OF REPORT:
+- GENUINE CAMPUS DEFECTS INCLUDE: Leaking pipes, damaged taps, broken flush, flooded/unhygienic restrooms, damp walls, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
+- NOT GENUINE (MUST REJECT): Selfies, faces, personal portraits, memes, cartoons, screenshots of apps/phones, random unrelated objects (food, drinks, pets, animals, vehicles, clothes, shoes, personal gadgets), blank/black/white screens, completely blurred/unidentifiable surfaces without visible defect, or prank submissions.
+
 Return ONLY valid JSON matching this schema:
 {
+  "is_genuine": true or false,
+  "rejection_reason": "Specific clear reason if not genuine (or empty string if genuine)",
   "defect_tags": ["defect_tag_1", "defect_tag_2", "defect_tag_3"],
   "severity_score": 8.5,
-  "summary": "1-sentence concise defect diagnosis."
+  "summary": "1-sentence concise defect diagnosis or verification finding"
 }`;
 
     // 1. Call Gemini 2.5 Flash
@@ -121,12 +128,18 @@ Return ONLY valid JSON matching this schema:
     const cleanJson = rawText.replace(/```json\n?|```/g, '').trim();
     const parsed = JSON.parse(cleanJson);
 
+    const isGenuine = parsed.is_genuine !== false;
+
     const result = {
+      is_genuine: isGenuine,
+      rejection_reason: !isGenuine
+        ? parsed.rejection_reason || 'Photo rejected: Not identified as a genuine campus facility defect.'
+        : undefined,
       tags: Array.isArray(parsed.defect_tags)
         ? parsed.defect_tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
         : ['defect_detected', 'urgent_inspection'],
-      severityScore: Number(parsed.severity_score) || 8.0,
-      summary: parsed.summary || 'Defect verified by Gemini 2.5 Flash Vision.',
+      severityScore: Number(parsed.severity_score) || (isGenuine ? 8.0 : 1.0),
+      summary: parsed.summary || (isGenuine ? 'Defect verified by Gemini 2.5 Flash Vision.' : 'Report rejected by AI verification.'),
       isRealAI: true,
       modelUsed: 'Google Gemini 2.5 Flash (Supabase Edge Proxy)',
     };
