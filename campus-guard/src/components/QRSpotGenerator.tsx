@@ -55,7 +55,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     ) {
       return window.location.origin;
     }
-    return 'https://campus-issue-reporter.vercel.app';
+    return 'https://campus-issue-reporter-sjbit.vercel.app';
   })().replace(/\/$/, '');
 
   // Generated QR & Card State
@@ -545,7 +545,7 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
               <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#334155' }}>Custom Domain:</span>
               <input
                 type="url"
-                placeholder="https://campus-issue-reporter.vercel.app"
+                placeholder="https://campus-issue-reporter-sjbit.vercel.app"
                 value={customDomain}
                 onChange={(e) => {
                   setCustomDomain(e.target.value);

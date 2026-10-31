@@ -78,7 +78,7 @@ export const AdminStaffManager: React.FC<AdminStaffManagerProps> = ({
     if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       return `${window.location.origin}/maintenance`;
     }
-    return 'https://campus-issue-reporter.vercel.app/maintenance';
+    return 'https://campus-issue-reporter-sjbit.vercel.app/maintenance';
   };
 
   const copyStaffCredentials = (name: string, spec: string, phone: string, pin: string, id?: string) => {
