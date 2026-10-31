@@ -22,10 +22,8 @@ import {
   Eye,
   Sliders,
   Maximize2,
-  LayoutGrid,
 } from 'lucide-react';
 import { CampusLocation, CampusBuildingConfig, IncidentTicket } from '../types';
-import { CampusFloorCanvas } from './CampusFloorCanvas';
 
 interface AdminArchitectureManagerProps {
   campusLocations: CampusLocation[];
@@ -35,7 +33,6 @@ interface AdminArchitectureManagerProps {
   onDeleteLocation: (locationId: string) => Promise<boolean>;
   onDeleteBuildingLocations: (buildingName: string) => Promise<boolean>;
   onDeleteFloorLocations: (buildingName: string, floorNumber: number) => Promise<boolean>;
-  onUpdateLocationCoords: (locationId: string, x: number, y: number) => Promise<boolean>;
 }
 
 const DEFAULT_BUILDINGS: CampusBuildingConfig[] = [
@@ -68,10 +65,7 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
   onDeleteLocation,
   onDeleteBuildingLocations,
   onDeleteFloorLocations,
-  onUpdateLocationCoords,
 }) => {
-  // View mode: Interactive Canvas (default) vs Grid List
-  const [viewMode, setViewMode] = useState<'CANVAS' | 'LIST'>('CANVAS');
   // Buildings State
   const [buildings, setBuildings] = useState<CampusBuildingConfig[]>(() => {
     try {
@@ -941,48 +935,6 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
 
           {/* Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {/* View Mode Toggle: Canvas vs Grid */}
-            <div style={{ display: 'flex', background: '#E2E8F0', borderRadius: 8, padding: 2 }}>
-              <button
-                type="button"
-                onClick={() => setViewMode('CANVAS')}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: viewMode === 'CANVAS' ? '#0F172A' : 'transparent',
-                  color: viewMode === 'CANVAS' ? 'white' : '#475569',
-                  fontSize: '0.76rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
-              >
-                <span>🎨 Canvas Blueprint</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('LIST')}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: viewMode === 'LIST' ? '#0F172A' : 'transparent',
-                  color: viewMode === 'LIST' ? 'white' : '#475569',
-                  fontSize: '0.76rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
-              >
-                <span>📋 Room Cards</span>
-              </button>
-            </div>
-
             <button
               type="button"
               onClick={() => setShowAddRoomModal(true)}
@@ -1050,20 +1002,8 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
           </div>
         </div>
 
-        {/* Rooms Display: Canvas View or Directory Grid */}
-        {viewMode === 'CANVAS' ? (
-          <CampusFloorCanvas
-            buildingName={selectedBuildingName}
-            floorNumber={selectedFloorNumber}
-            campusLocations={campusLocations}
-            tickets={tickets}
-            selectedTicketId={null}
-            onSelectTicket={() => {}}
-            onUpdateLocationCoords={onUpdateLocationCoords}
-            onAddLocation={onAddLocation}
-            onDeleteLocation={onDeleteLocation}
-          />
-        ) : filteredRooms.length === 0 ? (
+        {/* Rooms Grid */}
+        {filteredRooms.length === 0 ? (
           <div
             style={{
               padding: '40px 20px',

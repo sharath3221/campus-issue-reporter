@@ -455,34 +455,6 @@ export function useIncidents() {
     []
   );
 
-  // Update location spatial coordinates (x_coord, y_coord) on the interactive canvas
-  const updateLocationCoords = useCallback(
-    async (locationId: string, x: number, y: number): Promise<boolean> => {
-      setLocations((prev) => {
-        const updated = prev.map((l) =>
-          l.location_id === locationId ? { ...l, x_coord: x, y_coord: y } : l
-        );
-        try {
-          localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updated));
-        } catch (e) {}
-        return updated;
-      });
-
-      if (isSupabaseConfigured && supabase) {
-        try {
-          await supabase
-            .from('campus_locations')
-            .update({ x_coord: x, y_coord: y })
-            .eq('location_id', locationId);
-        } catch (e) {
-          console.warn('Supabase coords update notice:', e);
-        }
-      }
-      return true;
-    },
-    []
-  );
-
   // Delete / Remove a single Campus Location
   const deleteCampusLocation = useCallback(
     async (locationId: string): Promise<boolean> => {
@@ -984,7 +956,6 @@ export function useIncidents() {
     deleteCampusLocation,
     deleteCampusLocationsByBuilding,
     deleteCampusLocationsByFloor,
-    updateLocationCoords,
     addMaintenanceStaff,
     toggleStaffDuty,
     deleteMaintenanceStaff,

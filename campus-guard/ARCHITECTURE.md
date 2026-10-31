@@ -122,13 +122,7 @@ flowchart TD
   - 1-click On-Duty / Off-Duty status toggles.
   - Delete / remove staff members.
   - Persisted to Supabase `maintenance_staff` table and synced in real time across the portal.
-- **Live Interactive Blueprint Canvas (`CampusFloorCanvas.tsx`):** Real-time architectural floor canvas replacing static dummy placeholders. Renders actual rooms configured for the active building and floor with:
-  - 60fps drag & drop room repositioning with blueprint grid snapping (10px).
-  - Direct "+ Drop Room onto Canvas" placement tool.
-  - Auto-alignment along central corridor wings.
-  - Live incident pulse glowing borders (`animate-pulse`) and urgency indicators.
-  - Automatic persistence of spatial coordinates (`x_coord`, `y_coord`) to Supabase and localStorage.
-  - Interactive room inspection drawer with direct public report URL test links.
+- **Live 2D Spatial Floor Map:** Dynamic SVG floor map with building selector, multi-floor selector (Ground, Floors 1..N), and spatial pins colored by AI urgency and progression (🔴 Urgent, 🟡 Dispatched, 🟢 Resolved).
 - **One-Click WhatsApp Dispatch:** Generates pre-formatted work order messages with deep links to `/maintenance` and dispatches via Supabase Edge Function `dispatch-alert`.
 - **Spot QR Sticker Generator Studio:**
   - Configurable parameters: Building Name, Floor, Room, Zone Category, Fixture ID.
