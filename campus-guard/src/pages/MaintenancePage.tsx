@@ -39,6 +39,7 @@ import {
 } from '../types';
 import { useIncidents } from '../hooks/useIncidents';
 import { uploadIncidentMedia } from '../lib/supabaseClient';
+import confetti from 'canvas-confetti';
 import {
   getActiveStaffSession,
   signInMaintenanceStaff,
@@ -319,6 +320,14 @@ export const MaintenancePage: React.FC = () => {
 
       resolveTicket(resolvingTicket.ticket_id, publicStorageUrl || fixedPhotoPreview);
       setResolveSuccess(resolvingTicket.ticket_id);
+      try {
+        confetti({
+          particleCount: 60,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#10B981', '#059669', '#34D399', '#F59E0B'],
+        });
+      } catch (e) {}
       playAudioFeedback('Work order marked resolved. Fixed proof published.');
 
       setTimeout(() => {

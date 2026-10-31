@@ -39,6 +39,7 @@ import { AdminStaffManager } from '../components/AdminStaffManager';
 import { AdminArchitectureManager } from '../components/AdminArchitectureManager';
 import { CampusFloorCanvas } from '../components/CampusFloorCanvas';
 import { getActiveAdminSession, signOutAdmin, ADMIN_SESSION_KEY } from '../lib/supabaseAuth';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const AdminDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -369,8 +370,9 @@ export const AdminDashboardPage: React.FC = () => {
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        <button
+        <motion.button
           onClick={() => setActiveNavTab('OPERATIONS')}
+          whileTap={{ scale: 0.98 }}
           style={{
             padding: '12px 18px',
             background: 'transparent',
@@ -384,15 +386,16 @@ export const AdminDashboardPage: React.FC = () => {
             alignItems: 'center',
             gap: 8,
             flexShrink: 0,
-            transition: 'all 0.15s ease',
+            transition: 'border 0.15s ease, color 0.15s ease',
           }}
         >
           <Layers size={16} />
           <span>Live Operations & Spatial Map</span>
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
           onClick={() => setActiveNavTab('ARCHITECTURE')}
+          whileTap={{ scale: 0.98 }}
           style={{
             padding: '12px 18px',
             background: 'transparent',
@@ -406,7 +409,7 @@ export const AdminDashboardPage: React.FC = () => {
             alignItems: 'center',
             gap: 8,
             flexShrink: 0,
-            transition: 'all 0.15s ease',
+            transition: 'border 0.15s ease, color 0.15s ease',
           }}
         >
           <Compass size={16} />
@@ -423,10 +426,11 @@ export const AdminDashboardPage: React.FC = () => {
           >
             {campusBuildingNames.length} Bldgs • {campusLocations.length} Rms
           </span>
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
           onClick={() => setActiveNavTab('STAFF')}
+          whileTap={{ scale: 0.98 }}
           style={{
             padding: '12px 18px',
             background: 'transparent',
@@ -440,7 +444,7 @@ export const AdminDashboardPage: React.FC = () => {
             alignItems: 'center',
             gap: 8,
             flexShrink: 0,
-            transition: 'all 0.15s ease',
+            transition: 'border 0.15s ease, color 0.15s ease',
           }}
         >
           <Wrench size={16} />
@@ -457,7 +461,7 @@ export const AdminDashboardPage: React.FC = () => {
           >
             {maintenanceStaff.length}
           </span>
-        </button>
+        </motion.button>
       </div>
 
       {/* Main Content Area */}

@@ -30,6 +30,8 @@ import {
   VisionAnalysisResult,
 } from '../lib/geminiVision';
 import { supabase, isSupabaseConfigured, uploadIncidentMedia } from '../lib/supabaseClient';
+import confetti from 'canvas-confetti';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Helper to parse location information directly from standardized QR code format: QR-[BLD]-FL[X]-[ROOM]-[FIXTURE]
 function parseSpotFromId(locId: string): CampusLocation {
@@ -312,6 +314,14 @@ export const ReportPage: React.FC = () => {
       });
 
       setSubmittedResult(result);
+      try {
+        confetti({
+          particleCount: 50,
+          spread: 60,
+          origin: { y: 0.65 },
+          colors: ['#0288D1', '#10B981', '#F59E0B', '#3B82F6'],
+        });
+      } catch (e) {}
       playAudioFeedback(
         result.isDuplicate
           ? 'Duplicate report recorded! Priority score upgraded.'
@@ -694,9 +704,11 @@ export const ReportPage: React.FC = () => {
                 const isSelected = selectedCategory === cat;
 
                 return (
-                  <button
+                  <motion.button
                     key={cat}
                     type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleSelectCategory(cat)}
                     style={{
                       padding: '16px 12px',
@@ -708,10 +720,9 @@ export const ReportPage: React.FC = () => {
                       alignItems: 'center',
                       gap: 8,
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease-out',
+                      transition: 'border 0.15s ease, background 0.15s ease',
                       textAlign: 'center',
                       boxShadow: isSelected ? `0 4px 14px ${meta.color}30` : 'none',
-                      transform: isSelected ? 'scale(1.02)' : 'none',
                     }}
                   >
                     <span style={{ fontSize: '2.5rem', lineHeight: 1 }}>{meta.icon}</span>
@@ -730,7 +741,7 @@ export const ReportPage: React.FC = () => {
                         {meta.sublabel}
                       </div>
                     </div>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>

@@ -35,6 +35,8 @@ import {
   VisionAnalysisResult,
 } from '../lib/geminiVision';
 import { supabase, isSupabaseConfigured, uploadIncidentMedia } from '../lib/supabaseClient';
+import confetti from 'canvas-confetti';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const FloorReportPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -430,6 +432,14 @@ export const FloorReportPage: React.FC = () => {
       });
 
       setSubmittedResult(result);
+      try {
+        confetti({
+          particleCount: 50,
+          spread: 60,
+          origin: { y: 0.65 },
+          colors: ['#0288D1', '#10B981', '#F59E0B', '#3B82F6'],
+        });
+      } catch (e) {}
       playAudioFeedback(
         result.isDuplicate
           ? 'Duplicate report noted! Priority score escalated.'
@@ -967,9 +977,11 @@ export const FloorReportPage: React.FC = () => {
                   const meta = CATEGORY_META[cat];
                   const isSelected = selectedCategory === cat;
                   return (
-                    <button
+                    <motion.button
                       key={cat}
                       type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={() => handleSelectCategory(cat)}
                       style={{
                         padding: '12px 10px',
@@ -981,7 +993,7 @@ export const FloorReportPage: React.FC = () => {
                         alignItems: 'center',
                         textAlign: 'center',
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease',
+                        transition: 'border 0.15s ease, background 0.15s ease',
                       }}
                     >
                       <span style={{ fontSize: '1.75rem', marginBottom: 4 }}>{meta.icon}</span>
@@ -994,7 +1006,7 @@ export const FloorReportPage: React.FC = () => {
                       >
                         {meta.label}
                       </span>
-                    </button>
+                    </motion.button>
                   );
                 })}
               </div>
