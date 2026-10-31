@@ -441,24 +441,43 @@ export function useIncidents() {
 
       setTickets((prev) => [newTicket, ...prev]);
 
-      // Insert into Supabase
+      // Insert into Supabase (ensuring location exists first to satisfy foreign key constraint)
       if (isSupabaseConfigured && supabase) {
         supabase
-          .from('incident_tickets')
-          .insert({
-            ticket_id: newTicket.ticket_id,
-            location_id: newTicket.location_id,
-            category: newTicket.category,
-            ai_severity_score: newTicket.ai_severity_score,
-            status: newTicket.status,
-            duplicate_count: 1,
-            voice_transcript: newTicket.voice_transcript,
-            voice_audio_url: newTicket.voice_audio_url,
-            user_photo_url: newTicket.user_photo_url,
-            ai_vision_tags: newTicket.ai_vision_tags,
-            reported_at: newTicket.reported_at,
+          .from('campus_locations')
+          .upsert(
+            {
+              location_id: loc.location_id,
+              building_name: loc.building_name,
+              floor_number: loc.floor_number,
+              room_number: loc.room_number,
+              zone_category: loc.zone_category,
+              gps_latitude: loc.gps_latitude || 16.8456,
+              gps_longitude: loc.gps_longitude || 74.6012,
+              fixture_id: loc.fixture_id,
+              x_coord: loc.x_coord || 200,
+              y_coord: loc.y_coord || 150,
+            },
+            { onConflict: 'location_id' }
+          )
+          .then(() => {
+            return supabase!
+              .from('incident_tickets')
+              .insert({
+                ticket_id: newTicket.ticket_id,
+                location_id: newTicket.location_id,
+                category: newTicket.category,
+                ai_severity_score: newTicket.ai_severity_score,
+                status: newTicket.status,
+                duplicate_count: 1,
+                voice_transcript: newTicket.voice_transcript,
+                voice_audio_url: newTicket.voice_audio_url,
+                user_photo_url: newTicket.user_photo_url,
+                ai_vision_tags: newTicket.ai_vision_tags,
+                reported_at: newTicket.reported_at,
+              });
           })
-          .then(({ error }) => {
+          .then(({ error }: any) => {
             if (error) console.warn('Supabase ticket insert notice:', error);
           });
 

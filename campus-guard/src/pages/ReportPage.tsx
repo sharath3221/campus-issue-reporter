@@ -29,20 +29,69 @@ import {
   analyzeImageDefects,
   VisionAnalysisResult,
 } from '../lib/geminiVision';
-import { uploadIncidentMedia } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured, uploadIncidentMedia } from '../lib/supabaseClient';
+
+// Helper to parse location information directly from standardized QR code format: QR-[BLD]-FL[X]-[ROOM]-[FIXTURE]
+function parseSpotFromId(locId: string): CampusLocation {
+  const clean = locId.replace(/^QR-/, '');
+  const parts = clean.split('-');
+  const bldCode = parts[0] || 'CAMPUS';
+  let floor = 1;
+  const floorPart = parts.find((p) => p.startsWith('FL'));
+  if (floorPart) {
+    const parsed = parseInt(floorPart.replace('FL', ''), 10);
+    if (!isNaN(parsed)) floor = parsed;
+  }
+  const remaining = parts.filter((p) => p !== parts[0] && !p.startsWith('FL'));
+  const room = remaining[0] || 'AREA';
+  const fixture = remaining[1] || '';
+
+  return {
+    location_id: locId,
+    building_name: bldCode.length <= 5 ? `Block ${bldCode}` : bldCode,
+    floor_number: floor,
+    room_number: room,
+    zone_category: 'CLASSROOM',
+    fixture_id: fixture || undefined,
+    gps_latitude: 16.8456,
+    gps_longitude: 74.6012,
+  };
+}
 
 export const ReportPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { campusLocations, submitReport, getActiveSpotTicket } = useIncidents();
+  const [dynamicSpot, setDynamicSpot] = useState<CampusLocation | null>(null);
 
   // Read location query parameter e.g., ?loc=QR-BLD-A-FL1-WASH-02
   const locParam = searchParams.get('loc') || 'QR-BLD-A-FL1-WASH-02';
+
+  // If spot is not in local memory, fetch directly from Supabase
+  useEffect(() => {
+    if (!locParam || !isSupabaseConfigured || !supabase) return;
+    const exists = campusLocations.some((l) => l.location_id === locParam);
+    if (!exists) {
+      supabase
+        .from('campus_locations')
+        .select('*')
+        .eq('location_id', locParam)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setDynamicSpot(data as CampusLocation);
+          }
+        });
+    }
+  }, [locParam, campusLocations]);
+
   const currentSpot: CampusLocation =
-    campusLocations.find((l) => l.location_id === locParam) || campusLocations[0];
+    campusLocations.find((l) => l.location_id === locParam) ||
+    dynamicSpot ||
+    (campusLocations.length > 0 ? campusLocations[0] : parseSpotFromId(locParam));
 
   // Active Spot Ticket (if an issue is already open or resolved at this QR location)
-  const spotTicket = getActiveSpotTicket(currentSpot.location_id);
+  const spotTicket = currentSpot ? getActiveSpotTicket(currentSpot.location_id) : undefined;
 
   // Form State (Zero-Login)
   const [selectedCategory, setSelectedCategory] =

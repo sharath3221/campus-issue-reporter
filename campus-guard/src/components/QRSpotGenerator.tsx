@@ -39,24 +39,23 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     useState<CampusLocation['zone_category']>('CLASSROOM');
   const [fixtureId, setFixtureId] = useState<string>('FAN-01');
 
-  // QR Destination Base URL Configuration (Solves Mobile Phone Localhost Problem)
-  // Default to local Wi-Fi IP (172.16.23.19) if running locally so phone scanning works instantly!
-  const defaultLanIpUrl = `http://172.16.23.19:${window.location.port || '5173'}`;
-  const isCurrentlyLocalhost =
-    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-  const [baseUrlMode, setBaseUrlMode] = useState<'LAN' | 'PROD' | 'ORIGIN'>(() => {
-    const saved = localStorage.getItem('campuspulse_qr_base_mode');
-    if (saved === 'LAN' || saved === 'PROD' || saved === 'ORIGIN') return saved;
-    return isCurrentlyLocalhost ? 'LAN' : 'ORIGIN';
+  // Production Base URL: Auto-detects production domain, or allows admin to set custom institutional domain
+  const [productionDomain, setProductionDomain] = useState<string>(() => {
+    const saved = localStorage.getItem('campuspulse_prod_domain');
+    if (saved) return saved;
+    // In production, use live origin automatically
+    if (
+      typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      return window.location.origin;
+    }
+    // Default production domain or fallback
+    return 'https://campus-issue-reporter.vercel.app';
   });
 
-  const [prodBaseUrl, setProdBaseUrl] = useState<string>(() => {
-    return (
-      localStorage.getItem('campuspulse_qr_prod_url') ||
-      'https://campus-issue-reporter.vercel.app'
-    );
-  });
+  const effectiveDomain = (productionDomain.trim() || window.location.origin).replace(/\/$/, '');
 
   // Generated QR & Card State
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -93,40 +92,27 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     y_coord: 150,
   };
 
-  // Determine active base URL for QR generation
-  const activeBaseUrl = (() => {
-    if (baseUrlMode === 'LAN') return defaultLanIpUrl;
-    if (baseUrlMode === 'PROD') return prodBaseUrl.trim() || window.location.origin;
-    return window.location.origin;
-  })().replace(/\/$/, '');
-
-  // Target reporting URL encoded in QR code
-  const targetReportUrl = `${activeBaseUrl}/report?loc=${encodeURIComponent(
+  // Production Target reporting URL encoded in the QR sticker
+  const targetReportUrl = `${effectiveDomain}/report?loc=${encodeURIComponent(
     activeSpot.location_id
   )}`;
 
-  // Save base URL preferences
-  const handleSetBaseMode = (mode: 'LAN' | 'PROD' | 'ORIGIN') => {
-    setBaseUrlMode(mode);
-    localStorage.setItem('campuspulse_qr_base_mode', mode);
-  };
+  // Direct test URL for local machine
+  const localDirectUrl = `${window.location.origin}/report?loc=${encodeURIComponent(
+    activeSpot.location_id
+  )}`;
 
-  const handleSetProdUrl = (url: string) => {
-    setProdBaseUrl(url);
-    localStorage.setItem('campuspulse_qr_prod_url', url);
-  };
-
-  // Generate QR Code data URL whenever target URL changes
+  // Generate QR Code data URL whenever target URL changes (Production Standard: Pure Black on White, ErrorCorrection M)
   useEffect(() => {
     let isMounted = true;
     QRCode.toDataURL(targetReportUrl, {
-      width: 420,
-      margin: 2,
+      width: 480,
+      margin: 3,
       color: {
-        dark: '#0F172A',
+        dark: '#000000',
         light: '#FFFFFF',
       },
-      errorCorrectionLevel: 'H',
+      errorCorrectionLevel: 'M',
     })
       .then((url) => {
         if (isMounted) setQrDataUrl(url);
@@ -429,148 +415,89 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
           </div>
         </div>
 
-        {/* QR Destination Target Selector (Solves Mobile Phone Localhost Issue) */}
+        {/* Production URL Configuration */}
         <div
           style={{
             background: '#F8FAFC',
             border: '1.5px solid #E2E8F0',
             borderRadius: 14,
-            padding: '14px 16px',
+            padding: '12px 18px',
             marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
           }}
         >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 10,
-              flexWrap: 'wrap',
-              gap: 8,
-            }}
-          >
-            <div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F172A' }}>
-                QR Code Destination Host:
-              </span>
-              <span style={{ fontSize: '0.74rem', color: '#64748B', marginLeft: 8 }}>
-                (Choose what phone cameras open when scanned)
-              </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: '#E0F2FE',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#0288D1',
+              }}
+            >
+              <Globe size={18} />
             </div>
-
-            {/* Mode Buttons */}
-            <div style={{ display: 'flex', background: '#E2E8F0', padding: 3, borderRadius: 10, gap: 4 }}>
-              <button
-                type="button"
-                onClick={() => handleSetBaseMode('LAN')}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 7,
-                  border: 'none',
-                  background: baseUrlMode === 'LAN' ? '#0288D1' : 'transparent',
-                  color: baseUrlMode === 'LAN' ? 'white' : '#475569',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <Wifi size={13} />
-                <span>Wi-Fi Mobile IP (172.16.23.19)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSetBaseMode('PROD')}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 7,
-                  border: 'none',
-                  background: baseUrlMode === 'PROD' ? '#0288D1' : 'transparent',
-                  color: baseUrlMode === 'PROD' ? 'white' : '#475569',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <Globe size={13} />
-                <span>Production (Vercel)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSetBaseMode('ORIGIN')}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 7,
-                  border: 'none',
-                  background: baseUrlMode === 'ORIGIN' ? '#0288D1' : 'transparent',
-                  color: baseUrlMode === 'ORIGIN' ? 'white' : '#475569',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <span>Localhost</span>
-              </button>
+            <div>
+              <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0F172A' }}>
+                Production QR Target Domain
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                All generated placards & stickers encode this live URL for students/staff scanning across campus
+              </div>
             </div>
           </div>
 
-          {baseUrlMode === 'PROD' && (
-            <div style={{ marginTop: 8 }}>
-              <input
-                type="url"
-                placeholder="https://campus-issue-reporter.vercel.app"
-                value={prodBaseUrl}
-                onChange={(e) => handleSetProdUrl(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: '1.5px solid #0288D1',
-                  fontSize: '0.82rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <span style={{ fontSize: '0.68rem', color: '#64748B', marginTop: 3, display: 'block' }}>
-                Printed stickers will encode this public HTTPS domain so anyone scanning on campus reaches your live Vercel app.
-              </span>
-            </div>
-          )}
-
-          {baseUrlMode === 'ORIGIN' && isCurrentlyLocalhost && (
-            <div
-              style={{
-                marginTop: 8,
-                background: '#FFFBEB',
-                border: '1px solid #FDE68A',
-                borderRadius: 8,
-                padding: '8px 12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                color: '#B45309',
-                fontSize: '0.74rem',
-                fontWeight: 600,
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              type="url"
+              value={productionDomain}
+              onChange={(e) => {
+                setProductionDomain(e.target.value);
+                localStorage.setItem('campuspulse_prod_domain', e.target.value);
               }}
+              placeholder="https://campus-issue-reporter.vercel.app"
+              style={{
+                padding: '7px 12px',
+                borderRadius: 8,
+                border: '1.5px solid #CBD5E1',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                width: 310,
+                color: '#0F172A',
+                background: 'white',
+                boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setProductionDomain(window.location.origin);
+                localStorage.setItem('campuspulse_prod_domain', window.location.origin);
+              }}
+              style={{
+                padding: '7px 12px',
+                borderRadius: 8,
+                border: '1px solid #CBD5E1',
+                background: 'white',
+                fontSize: '0.74rem',
+                fontWeight: 800,
+                color: '#0288D1',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title="Set to current browser origin"
             >
-              <AlertTriangle size={15} style={{ flexShrink: 0 }} />
-              <span>
-                <b>Phone Scanning Warning:</b> Mobile phone cameras cannot open "localhost" because localhost points to the phone itself. Switch to <b>Wi-Fi Mobile IP</b> or <b>Production (Vercel)</b> so your phone can open the reporter!
-              </span>
-            </div>
-          )}
+              Set Current ({window.location.host})
+            </button>
+          </div>
         </div>
 
         {/* 2-Column Grid: Form (Left) vs Live High-Res Card Preview (Right) */}
@@ -992,32 +919,61 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
               </span>
             </div>
 
-            {/* Direct Open in Browser Button */}
-            <a
-              href={targetReportUrl}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                width: '100%',
-                maxWidth: 320,
-                padding: '10px 14px',
-                borderRadius: 10,
-                border: '1.5px solid #0288D1',
-                background: '#F0F9FF',
-                color: '#0288D1',
-                fontSize: '0.8rem',
-                fontWeight: 800,
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                boxSizing: 'border-box',
-              }}
-            >
-              <ExternalLink size={15} />
-              <span>Test Report Page in New Tab</span>
-            </a>
+            {/* Direct Open in Browser Action */}
+            <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <a
+                href={localDirectUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  border: '1.5px solid #0288D1',
+                  background: '#0288D1',
+                  color: 'white',
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  boxSizing: 'border-box',
+                  boxShadow: '0 2px 8px rgba(2, 136, 209, 0.3)',
+                }}
+              >
+                <ExternalLink size={15} />
+                <span>Open & Test Public Reporter</span>
+              </a>
+
+              {targetReportUrl !== localDirectUrl && (
+                <a
+                  href={targetReportUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: '1px solid #CBD5E1',
+                    background: '#F8FAFC',
+                    color: '#64748B',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <Globe size={13} />
+                  <span>Open Encoded Production URL</span>
+                </a>
+              )}
+            </div>
 
             {/* Sticker Output Actions */}
             <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 320 }}>
