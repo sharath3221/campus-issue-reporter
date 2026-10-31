@@ -38,6 +38,7 @@ import { useIncidents } from '../hooks/useIncidents';
 import { QRSpotGenerator } from '../components/QRSpotGenerator';
 import { AdminStaffManager } from '../components/AdminStaffManager';
 import { AdminArchitectureManager } from '../components/AdminArchitectureManager';
+import { CampusFloorCanvas } from '../components/CampusFloorCanvas';
 import { getActiveAdminSession, signOutAdmin, ADMIN_SESSION_KEY } from '../lib/supabaseAuth';
 
 export const AdminDashboardPage: React.FC = () => {
@@ -51,6 +52,7 @@ export const AdminDashboardPage: React.FC = () => {
     deleteCampusLocation,
     deleteCampusLocationsByBuilding,
     deleteCampusLocationsByFloor,
+    updateLocationCoords,
     addMaintenanceStaff,
     toggleStaffDuty,
     deleteMaintenanceStaff,
@@ -476,6 +478,7 @@ export const AdminDashboardPage: React.FC = () => {
             onDeleteLocation={deleteCampusLocation}
             onDeleteBuildingLocations={deleteCampusLocationsByBuilding}
             onDeleteFloorLocations={deleteCampusLocationsByFloor}
+            onUpdateLocationCoords={updateLocationCoords}
           />
         ) : activeNavTab === 'QR_STUDIO' ? (
           <QRSpotGenerator
@@ -590,127 +593,18 @@ export const AdminDashboardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Interactive SVG Floor Map */}
-            <div
-              style={{
-                position: 'relative',
-                background: '#F8FAFC',
-                borderRadius: 14,
-                border: '1.5px solid #E2E8F0',
-                overflow: 'hidden',
-              }}
-            >
-              <svg viewBox="0 0 760 420" style={{ width: '100%', height: 'auto', display: 'block' }}>
-                {/* Floor Blueprint Grid */}
-                <defs>
-                  <pattern id="admin-grid" width="25" height="25" patternUnits="userSpaceOnUse">
-                    <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#E2E8F0" strokeWidth="0.8" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#admin-grid)" />
-
-                {/* Building Zones on Floor */}
-                {/* Zone 1: Washrooms */}
-                <rect x="80" y="80" width="180" height="150" rx="10" fill="#E0F2FE" stroke="#7DD3FC" strokeWidth="2" />
-                <text x="170" y="150" textAnchor="middle" fill="#0369A1" fontSize="12" fontWeight="800">
-                  Washroom Cluster
-                </text>
-                <text x="170" y="168" textAnchor="middle" fill="#0284C7" fontSize="9" fontWeight="600">
-                  {selectedMapBuilding} • Floor {selectedFloor}
-                </text>
-
-                {/* Zone 2: Lecture Halls */}
-                <rect x="290" y="70" width="220" height="180" rx="10" fill="#FEF3C7" stroke="#FCD34D" strokeWidth="2" />
-                <text x="400" y="150" textAnchor="middle" fill="#92400E" fontSize="12" fontWeight="800">
-                  Lecture Halls & Classrooms
-                </text>
-                <text x="400" y="168" textAnchor="middle" fill="#B45309" fontSize="9" fontWeight="600">
-                  {selectedMapBuilding} Level {selectedFloor}
-                </text>
-
-                {/* Zone 3: Corridor / Water Coolers */}
-                <rect x="540" y="110" width="160" height="190" rx="10" fill="#F3E8FF" stroke="#D8B4FE" strokeWidth="2" />
-                <text x="620" y="190" textAnchor="middle" fill="#6B21A8" fontSize="12" fontWeight="800">
-                  Faculty & Amenities
-                </text>
-                <text x="620" y="208" textAnchor="middle" fill="#7E22CE" fontSize="9" fontWeight="600">
-                  Cooler & Faculty Suites
-                </text>
-
-                {/* Corridor Path */}
-                <path d="M 80 250 L 680 250" stroke="#CBD5E1" strokeWidth="18" strokeLinecap="round" opacity="0.6" />
-                <text x="380" y="254" textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="700">
-                  MAIN CORRIDOR ({selectedMapBuilding.toUpperCase()} - FLOOR {selectedFloor})
-                </text>
-
-                {/* Spatial Pins (§3) */}
-                {tickets
-                  .filter((t) => t.location?.floor_number === selectedFloor)
-                  .map((t) => {
-                    const x = t.location?.x_coord || 200;
-                    const y = t.location?.y_coord || 150;
-                    const isSelected = selectedTicketId === t.ticket_id;
-
-                    // Color code pins: 🔴 Red (REPORTED), 🟡 Yellow (DISPATCHED), 🟢 Green (RESOLVED)
-                    const pinColor =
-                      t.status === 'REPORTED'
-                        ? '#EF4444'
-                        : t.status === 'DISPATCHED'
-                        ? '#F59E0B'
-                        : '#10B981';
-
-                    return (
-                      <g
-                        key={t.ticket_id}
-                        transform={`translate(${x}, ${y})`}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => setSelectedTicketId(t.ticket_id)}
-                      >
-                        {/* Pulse circle for critical reports */}
-                        {t.status === 'REPORTED' && t.ai_severity_score >= 80 && (
-                          <circle r="18" fill="none" stroke="#EF4444" strokeWidth="2.5" className="animate-pulse" />
-                        )}
-
-                        <circle
-                          r={isSelected ? 14 : 11}
-                          fill={pinColor}
-                          stroke="white"
-                          strokeWidth="3"
-                          filter="drop-shadow(0 3px 6px rgba(0,0,0,0.25))"
-                        />
-                        <text x="0" y="4" textAnchor="middle" fill="white" fontSize="10" fontWeight="900">
-                          {CATEGORY_META[t.category].icon}
-                        </text>
-
-                        {/* Floating spot tag */}
-                        <rect x="-35" y="-28" width="70" height="16" rx="4" fill="#0F172A" opacity="0.85" />
-                        <text x="0" y="-17" textAnchor="middle" fill="white" fontSize="8" fontWeight="700">
-                          {t.location?.room_number}
-                        </text>
-                      </g>
-                    );
-                  })}
-              </svg>
-            </div>
-
-            {/* Map Legend */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, fontSize: '0.75rem', color: '#64748B' }}>
-              <div style={{ display: 'flex', gap: 14 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#EF4444' }} />
-                  <strong>🔴 Active Critical</strong>
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#F59E0B' }} />
-                  <strong>🟡 Dispatched En Route</strong>
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} />
-                  <strong>🟢 Resolved Proof</strong>
-                </span>
-              </div>
-              <span>Click pin to inspect ticket</span>
-            </div>
+            {/* Interactive College Floor Plan Canvas */}
+            <CampusFloorCanvas
+              buildingName={selectedMapBuilding}
+              floorNumber={selectedFloor}
+              campusLocations={campusLocations}
+              tickets={tickets}
+              selectedTicketId={selectedTicketId}
+              onSelectTicket={setSelectedTicketId}
+              onUpdateLocationCoords={updateLocationCoords}
+              onAddLocation={addCampusLocation}
+              onDeleteLocation={deleteCampusLocation}
+            />
           </div>
 
           {/* Column 2: INCIDENT MANAGEMENT FEED (§3) */}
