@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
-  Volume2,
   Check,
   Shield,
   ChevronRight,
@@ -116,24 +115,8 @@ export const ReportPage: React.FC = () => {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Audio speech synthesis feedback when tapping category buttons
-  const playAudioFeedback = (text: string) => {
-    try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        window.speechSynthesis.speak(utterance);
-      }
-    } catch (e) {
-      console.log('Audio feedback not available', e);
-    }
-  };
-
   const handleSelectCategory = (cat: IncidentCategory) => {
     setSelectedCategory(cat);
-    playAudioFeedback(CATEGORY_META[cat].audioText);
   };
 
   // Process captured/selected image automatically with Computer Vision
@@ -147,11 +130,6 @@ export const ReportPage: React.FC = () => {
       const analysis = await analyzeImageDefects(dataUrl, selectedCategory);
       setCvTags(analysis.tags);
       setVisionResult(analysis);
-      if (!analysis.isGenuine) {
-        playAudioFeedback('Report rejected. Photo does not appear to show a genuine campus facility defect. Please photograph the physical defect.');
-      } else {
-        playAudioFeedback('Photo captured and defect tags identified.');
-      }
     } catch (err) {
       console.error('Vision analysis failure:', err);
       setCvTags(['defect_detected', 'urgent_inspection']);
@@ -284,13 +262,11 @@ export const ReportPage: React.FC = () => {
 
     if (!photoPreview) {
       setShowPhotoError(true);
-      playAudioFeedback('Photo is mandatory. Please capture or upload a photo first.');
       return;
     }
 
     // Enforce Gemini Genuineness Verification
     if (visionResult && !visionResult.isGenuine) {
-      playAudioFeedback('Submission blocked. Gemini AI determined this photo is not a genuine campus facility defect.');
       return;
     }
 
@@ -322,11 +298,6 @@ export const ReportPage: React.FC = () => {
           colors: ['#0288D1', '#10B981', '#F59E0B', '#3B82F6'],
         });
       } catch (e) {}
-      playAudioFeedback(
-        result.isDuplicate
-          ? 'Duplicate report recorded! Priority score upgraded.'
-          : 'Report submitted successfully to campus administration.'
-      );
     } catch (err) {
       console.error('Submission failure:', err);
     } finally {
@@ -680,15 +651,12 @@ export const ReportPage: React.FC = () => {
             gap: 20,
           }}
         >
-          {/* Section 1: 4 Large Pictographic Buttons for Non-Literate Staff (Aayas) */}
+          {/* Section 1: Issue Category Selection */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <label style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F172A' }}>
-                1. Tap Issue Category / समस्या चुनें
+                1. Select Issue Category
               </label>
-              <span style={{ fontSize: '0.72rem', color: '#0288D1', fontWeight: 700 }}>
-                Audio Guided 🔊
-              </span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>

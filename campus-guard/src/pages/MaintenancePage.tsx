@@ -131,20 +131,6 @@ export const MaintenancePage: React.FC = () => {
     }
   }, [targetTicketId, tickets]);
 
-  // Audio speech synthesis feedback
-  const playAudioFeedback = (text: string) => {
-    try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        window.speechSynthesis.speak(utterance);
-      }
-    } catch (e) {
-      console.log('Audio feedback error', e);
-    }
-  };
-
   // Staff Login Handler
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,7 +144,6 @@ export const MaintenancePage: React.FC = () => {
         maintenanceStaff
       );
       setCurrentStaff(authStaff);
-      playAudioFeedback(`Welcome on duty, ${authStaff.full_name}.`);
     } catch (err: any) {
       setLoginError(err.message || 'Authentication failed. Please verify credentials.');
     } finally {
@@ -174,7 +159,6 @@ export const MaintenancePage: React.FC = () => {
     setLoginPasscode('');
     setLoginError(null);
     setResolvingTicket(null);
-    playAudioFeedback('Signed out from maintenance portal.');
   };
 
   // Toggle On-Duty / Off-Duty by technician
@@ -187,7 +171,6 @@ export const MaintenancePage: React.FC = () => {
       localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(updated));
     } catch (e) {}
     await toggleStaffDuty(currentStaff.staff_id, newStatus);
-    playAudioFeedback(newStatus ? 'You are now marked ON DUTY.' : 'You are now marked OFF DUTY.');
   };
 
   // Live Camera Handlers
@@ -246,7 +229,6 @@ export const MaintenancePage: React.FC = () => {
 
     if (dataUrl) {
       setFixedPhotoPreview(dataUrl);
-      playAudioFeedback('Fixed photo proof captured.');
     }
   };
 
@@ -295,7 +277,6 @@ export const MaintenancePage: React.FC = () => {
     const reader = new FileReader();
     reader.onload = () => {
       setFixedPhotoPreview(reader.result as string);
-      playAudioFeedback('Proof photo uploaded successfully.');
     };
     reader.readAsDataURL(file);
   };
@@ -328,7 +309,6 @@ export const MaintenancePage: React.FC = () => {
           colors: ['#10B981', '#059669', '#34D399', '#F59E0B'],
         });
       } catch (e) {}
-      playAudioFeedback('Work order marked resolved. Fixed proof published.');
 
       setTimeout(() => {
         setResolvingTicket(null);

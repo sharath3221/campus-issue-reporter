@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
-  Volume2,
   Check,
   Shield,
   ChevronRight,
@@ -175,29 +174,12 @@ export const FloorReportPage: React.FC = () => {
         if (match.zone_category === 'WASHROOM') {
           setSelectedCategory('WATER_SUPPLY');
         }
-        playAudioFeedback(`Selected ${val}`);
       }
-    }
-  };
-
-  // Audio speech feedback
-  const playAudioFeedback = (text: string) => {
-    try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
-        window.speechSynthesis.speak(utterance);
-      }
-    } catch {
-      // Audio playback fallback
     }
   };
 
   const handleSelectCategory = (cat: IncidentCategory) => {
     setSelectedCategory(cat);
-    playAudioFeedback(CATEGORY_META[cat].audioText);
   };
 
   // Start Live Camera
@@ -310,14 +292,6 @@ export const FloorReportPage: React.FC = () => {
       const analysis = await analyzeImageDefects(dataUrl, selectedCategory);
       setCvTags(analysis.tags);
       setVisionResult(analysis);
-
-      if (!analysis.isGenuine) {
-        playAudioFeedback(
-          'Report rejected. The uploaded photo was not recognized as a genuine campus facility defect. Please photograph the physical defect clearly.'
-        );
-      } else {
-        playAudioFeedback('Photo verified by AI. Defect tags identified.');
-      }
     } catch (err) {
       console.error('Vision analysis error:', err);
       // Fallback genuine check
@@ -365,7 +339,6 @@ export const FloorReportPage: React.FC = () => {
     const trimmedRoom = roomNumber.trim();
     if (!trimmedRoom) {
       setShowRoomError(true);
-      playAudioFeedback('Please enter the room number or area name.');
       return;
     }
     setShowRoomError(false);
@@ -373,15 +346,11 @@ export const FloorReportPage: React.FC = () => {
     // 2. Validate Photo
     if (!photoPreview) {
       setShowPhotoError(true);
-      playAudioFeedback('Photo is mandatory. Please capture or upload a defect photo.');
       return;
     }
 
     // 3. ENFORCE GEMINI GENUINENESS VERIFICATION
     if (visionResult && !visionResult.isGenuine) {
-      playAudioFeedback(
-        'Submission blocked. Gemini AI determined this photo is not a genuine campus facility defect.'
-      );
       return;
     }
 
@@ -440,11 +409,6 @@ export const FloorReportPage: React.FC = () => {
           colors: ['#0288D1', '#10B981', '#F59E0B', '#3B82F6'],
         });
       } catch (e) {}
-      playAudioFeedback(
-        result.isDuplicate
-          ? 'Duplicate report noted! Priority score escalated.'
-          : 'Report verified and submitted successfully to campus facility management.'
-      );
     } catch (err) {
       console.error('Submission failed:', err);
     } finally {
