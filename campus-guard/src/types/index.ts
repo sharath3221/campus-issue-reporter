@@ -30,6 +30,7 @@ export interface CampusBuildingConfig {
   building_name: string;
   building_code: string;
   floors_count: number;
+  floors?: number[];
   description?: string;
 }
 

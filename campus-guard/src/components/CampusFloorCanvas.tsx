@@ -590,6 +590,43 @@ export const CampusFloorCanvas: React.FC<CampusFloorCanvasProps> = ({
             </text>
           </g>
 
+          {/* Empty Floor Helper Display */}
+          {floorLocations.length === 0 && (
+            <g opacity="0.95">
+              <rect
+                x={CANVAS_WIDTH / 2 - 190}
+                y="110"
+                width="380"
+                height="85"
+                rx="12"
+                fill="#0F172A"
+                stroke="#0288D1"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+              />
+              <text
+                x={CANVAS_WIDTH / 2}
+                y="145"
+                textAnchor="middle"
+                fill="#38BDF8"
+                fontSize="14"
+                fontWeight="900"
+              >
+                ✨ Floor {floorNumber === 0 ? 'Ground (0)' : floorNumber < 0 ? `Basement (${floorNumber})` : floorNumber} Ready for Blueprinting
+              </text>
+              <text
+                x={CANVAS_WIDTH / 2}
+                y="172"
+                textAnchor="middle"
+                fill="#94A3B8"
+                fontSize="11.5"
+                fontWeight="600"
+              >
+                Click "+ Add Single Room" or "⚡ Batch Room Wizard" above to add rooms
+              </text>
+            </g>
+          )}
+
           {/* Render All Room Nodes on Canvas */}
           {floorLocations.map((loc) => {
             const coords = localCoords[loc.location_id] || {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
 import {
   Building,
@@ -40,12 +40,12 @@ interface AdminArchitectureManagerProps {
 }
 
 const DEFAULT_BUILDINGS: CampusBuildingConfig[] = [
-  { building_id: 'bld-eng-a', building_name: 'Engineering Block A', building_code: 'ENG-A', floors_count: 3 },
-  { building_id: 'bld-sci-b', building_name: 'Science Block B', building_code: 'SCI-B', floors_count: 3 },
-  { building_id: 'bld-acad-c', building_name: 'Academic Complex C', building_code: 'ACAD-C', floors_count: 4 },
-  { building_id: 'bld-lib', building_name: 'Central Library', building_code: 'LIB', floors_count: 2 },
-  { building_id: 'bld-hostel-1', building_name: 'Hostel Block 1', building_code: 'HOSTEL-1', floors_count: 4 },
-  { building_id: 'bld-admin', building_name: 'Administrative Center', building_code: 'ADMIN', floors_count: 2 },
+  { building_id: 'bld-eng-a', building_name: 'Engineering Block A', building_code: 'ENG-A', floors_count: 3, floors: [1, 2, 3] },
+  { building_id: 'bld-sci-b', building_name: 'Science Block B', building_code: 'SCI-B', floors_count: 3, floors: [1, 2, 3] },
+  { building_id: 'bld-acad-c', building_name: 'Academic Complex C', building_code: 'ACAD-C', floors_count: 4, floors: [1, 2, 3, 4] },
+  { building_id: 'bld-lib', building_name: 'Central Library', building_code: 'LIB', floors_count: 2, floors: [1, 2] },
+  { building_id: 'bld-hostel-1', building_name: 'Hostel Block 1', building_code: 'HOSTEL-1', floors_count: 4, floors: [1, 2, 3, 4] },
+  { building_id: 'bld-admin', building_name: 'Administrative Center', building_code: 'ADMIN', floors_count: 2, floors: [1, 2] },
 ];
 
 const ZONE_CONFIG: Record<
@@ -157,35 +157,54 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
     ])
   );
 
+  // Helper to compute all active floors for a building (configured floors + room floors)
+  const getBuildingFloors = useCallback(
+    (bld: CampusBuildingConfig | undefined, bldName: string): number[] => {
+      const roomFloors = campusLocations
+        .filter((l) => l.building_name === bldName)
+        .map((l) => l.floor_number);
+
+      const configuredFloors =
+        bld?.floors && Array.isArray(bld.floors) && bld.floors.length > 0
+          ? bld.floors
+          : Array.from(
+              { length: Math.max(1, bld?.floors_count || 1) },
+              (_, i) => i + 1
+            );
+
+      return Array.from(new Set([...configuredFloors, ...roomFloors])).sort((a, b) => a - b);
+    },
+    [campusLocations]
+  );
+
   const activeBuilding =
     buildings.find((b) => b.building_name === selectedBuildingName) || {
       building_id: `bld-${selectedBuildingName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
       building_name: selectedBuildingName,
       building_code: selectedBuildingName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase(),
       floors_count: 3,
+      floors: [1, 2, 3],
     };
 
-  // Get all floors present for the active building
+  // Get all rooms present for the active building
   const locationsInBuilding = campusLocations.filter(
     (l) => l.building_name === selectedBuildingName
   );
 
-  const discoveredFloors = Array.from(
-    new Set(locationsInBuilding.map((l) => l.floor_number))
+  const configuredFloors = getBuildingFloors(activeBuilding, selectedBuildingName);
+
+  // Available floors for navigation tabs: union of configured floors, room floors, and current selection
+  const availableFloors = Array.from(
+    new Set([...configuredFloors, selectedFloorNumber])
   ).sort((a, b) => a - b);
 
-  // If no locations exist yet on building, show 1..floors_count
-  const availableFloors =
-    discoveredFloors.length > 0
-      ? discoveredFloors
-      : Array.from({ length: activeBuilding.floors_count }, (_, i) => i + 1);
-
-  // If selected floor is not in available floors, snap to first available
+  // When user switches building, snap to first available floor of that building if current floor doesn't exist in it
   useEffect(() => {
-    if (availableFloors.length > 0 && !availableFloors.includes(selectedFloorNumber)) {
-      setSelectedFloorNumber(availableFloors[0]);
+    const bldFloors = getBuildingFloors(activeBuilding, selectedBuildingName);
+    if (bldFloors.length > 0 && !bldFloors.includes(selectedFloorNumber)) {
+      setSelectedFloorNumber(bldFloors[0]);
     }
-  }, [availableFloors, selectedFloorNumber]);
+  }, [selectedBuildingName, activeBuilding, getBuildingFloors]);
 
   // Rooms on current floor
   const roomsOnFloor = locationsInBuilding.filter(
@@ -257,20 +276,22 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
     const bldCode = (newBldCode.trim() || bldName.slice(0, 5)).toUpperCase();
     const totalFloors = Math.max(1, newBldFloorsCount);
 
+    const floorList: number[] = [];
+    if (newBldIncludeGround) floorList.push(0);
+    for (let f = 1; f <= totalFloors; f++) floorList.push(f);
+
     const newBuildingConfig: CampusBuildingConfig = {
       building_id: `bld-${Date.now().toString().slice(-6)}`,
       building_name: bldName,
       building_code: bldCode,
       floors_count: totalFloors,
+      floors: floorList,
     };
 
     setBuildings((prev) => [...prev, newBuildingConfig]);
 
     // Template Generation
     const starterRooms: CampusLocation[] = [];
-    const floorList: number[] = [];
-    if (newBldIncludeGround) floorList.push(0);
-    for (let f = 1; f <= totalFloors; f++) floorList.push(f);
 
     if (newBldTemplate === 'ACADEMIC') {
       floorList.forEach((flr) => {
@@ -395,17 +416,38 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
   // -------------------------------------------------------------
   // ACTIONS: ADD FLOOR
   // -------------------------------------------------------------
+  const handleOpenAddFloorModal = () => {
+    const positiveFloors = availableFloors.filter((f) => f > 0);
+    const nextFloor = positiveFloors.length > 0 ? Math.max(...positiveFloors) + 1 : 1;
+    setNewFloorNum(nextFloor);
+    setShowAddFloorModal(true);
+  };
+
   const handleAddFloorSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSelectedFloorNumber(newFloorNum);
-    // Update building floors_count if higher
+    const floorToAdd = Number(newFloorNum);
+    if (isNaN(floorToAdd)) return;
+
+    setSelectedFloorNumber(floorToAdd);
+
+    // Update building floors list and floors_count
     setBuildings((prev) =>
-      prev.map((b) =>
-        b.building_name === selectedBuildingName
-          ? { ...b, floors_count: Math.max(b.floors_count, newFloorNum) }
-          : b
-      )
+      prev.map((b) => {
+        if (b.building_name !== selectedBuildingName) return b;
+        const currentFloors = getBuildingFloors(b, b.building_name);
+        const updatedFloors = Array.from(new Set([...currentFloors, floorToAdd])).sort((a, b) => a - b);
+        return {
+          ...b,
+          floors: updatedFloors,
+          floors_count: Math.max(
+            b.floors_count,
+            ...updatedFloors.filter((f) => f > 0),
+            floorToAdd > 0 ? floorToAdd : 1
+          ),
+        };
+      })
     );
+
     setShowAddFloorModal(false);
   };
 
@@ -537,14 +579,44 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
 
   const handleDeleteFloor = async () => {
     const count = roomsOnFloor.length;
-    if (
-      !window.confirm(
-        `Remove Floor ${selectedFloorNumber} of "${selectedBuildingName}" with all its ${count} rooms?`
-      )
-    ) {
-      return;
+    if (count > 0) {
+      if (
+        !window.confirm(
+          `Clear Floor ${selectedFloorNumber} of "${selectedBuildingName}" and remove all its ${count} rooms?`
+        )
+      ) {
+        return;
+      }
+      await onDeleteFloorLocations(selectedBuildingName, selectedFloorNumber);
+    } else {
+      if (
+        !window.confirm(
+          `Remove Floor ${selectedFloorNumber} from "${selectedBuildingName}"?`
+        )
+      ) {
+        return;
+      }
     }
-    await onDeleteFloorLocations(selectedBuildingName, selectedFloorNumber);
+
+    // Remove floor from building's configured floors
+    setBuildings((prev) =>
+      prev.map((b) => {
+        if (b.building_name !== selectedBuildingName) return b;
+        const currentFloors = getBuildingFloors(b, b.building_name);
+        const updatedFloors = currentFloors.filter((f) => f !== selectedFloorNumber);
+        return {
+          ...b,
+          floors: updatedFloors.length > 0 ? updatedFloors : [1],
+          floors_count: Math.max(1, ...updatedFloors.filter((f) => f > 0)),
+        };
+      })
+    );
+
+    // Switch selection to remaining floor
+    const remaining = availableFloors.filter((f) => f !== selectedFloorNumber);
+    if (remaining.length > 0) {
+      setSelectedFloorNumber(remaining[0]);
+    }
   };
 
   // -------------------------------------------------------------
@@ -676,8 +748,8 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
             <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Total Configured Floors</div>
             <div style={{ fontSize: '1.7rem', fontWeight: 900, color: '#0F172A', marginTop: 2 }}>
               {allBuildingNames.reduce((acc, bldName) => {
-                const flrs = new Set(campusLocations.filter((l) => l.building_name === bldName).map((l) => l.floor_number));
-                return acc + Math.max(1, flrs.size);
+                const bld = buildings.find((b) => b.building_name === bldName);
+                return acc + getBuildingFloors(bld, bldName).length;
               }, 0)}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 700 }}>Active Spatial Levels</div>
@@ -718,7 +790,7 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
             const isSelected = selectedBuildingName === bldName;
             const bldConfig = buildings.find((b) => b.building_name === bldName);
             const bldRooms = campusLocations.filter((l) => l.building_name === bldName);
-            const bldFloors = Array.from(new Set(bldRooms.map((l) => l.floor_number)));
+            const bldFloors = getBuildingFloors(bldConfig, bldName);
             const bldTickets = tickets.filter(
               (t) => t.status !== 'RESOLVED' && t.location?.building_name === bldName
             );
@@ -839,7 +911,7 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               type="button"
-              onClick={() => setShowAddFloorModal(true)}
+              onClick={handleOpenAddFloorModal}
               style={{
                 padding: '7px 12px',
                 borderRadius: 8,
@@ -858,7 +930,7 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
               <span>Add Floor</span>
             </button>
 
-            {roomsOnFloor.length > 0 && (
+            {availableFloors.length > 1 && (
               <button
                 type="button"
                 onClick={handleDeleteFloor}
@@ -877,7 +949,11 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
                 }}
               >
                 <Trash2 size={14} />
-                <span>Clear Floor {selectedFloorNumber}</span>
+                <span>
+                  {roomsOnFloor.length > 0
+                    ? `Clear Floor ${selectedFloorNumber} (${roomsOnFloor.length} rms)`
+                    : `Remove Empty Floor ${selectedFloorNumber}`}
+                </span>
               </button>
             )}
           </div>
@@ -929,6 +1005,29 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
               </button>
             );
           })}
+
+          {/* Quick Inline Add Floor Pill */}
+          <button
+            type="button"
+            onClick={handleOpenAddFloorModal}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 12,
+              border: '1.5px dashed #0288D1',
+              background: '#F0F9FF',
+              color: '#0288D1',
+              fontSize: '0.82rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Plus size={14} />
+            <span>Add Floor</span>
+          </button>
         </div>
 
         {/* Room Action Bar */}
@@ -1476,31 +1575,74 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
             </div>
 
             <form onSubmit={handleAddFloorSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Quick Preset Buttons */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 800, color: '#64748B', marginBottom: 6 }}>
+                  Quick Suggested Levels:
+                </label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {(() => {
+                    const positiveFloors = availableFloors.filter((f) => f > 0);
+                    const nextFloor = positiveFloors.length > 0 ? Math.max(...positiveFloors) + 1 : 1;
+                    const presets = [
+                      { label: `+ Floor ${nextFloor}`, val: nextFloor },
+                      ...(!availableFloors.includes(0) ? [{ label: '+ Ground Floor (0)', val: 0 }] : []),
+                      ...(!availableFloors.includes(-1) ? [{ label: '+ Basement (-1)', val: -1 }] : []),
+                    ];
+
+                    return presets.map((p) => (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => setNewFloorNum(p.val)}
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: 8,
+                          border: newFloorNum === p.val ? '1.5px solid #0288D1' : '1px solid #CBD5E1',
+                          background: newFloorNum === p.val ? '#E0F2FE' : '#F8FAFC',
+                          color: newFloorNum === p.val ? '#0288D1' : '#334155',
+                          fontSize: '0.74rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </div>
+
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 5 }}>
-                  Floor Number:
+                  Floor Level Number:
                 </label>
                 <input
                   type="number"
                   required
-                  placeholder="e.g. 4 or -1"
+                  placeholder="e.g. 3, 4, 0 or -1"
                   value={newFloorNum}
                   onChange={(e) => setNewFloorNum(Number(e.target.value))}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: 8,
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '0.9rem',
+                    border: '1.5px solid #0288D1',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
                     boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
+                <p style={{ fontSize: '0.72rem', color: '#64748B', margin: '4px 0 0' }}>
+                  Active levels: {availableFloors.map((f) => f === 0 ? 'Ground' : f < 0 ? `Basement ${f}` : `Floor ${f}`).join(', ')}
+                </p>
               </div>
 
               <button
                 type="submit"
                 style={{
-                  padding: 11,
+                  padding: 12,
                   borderRadius: 10,
                   border: 'none',
                   background: '#0288D1',
@@ -1508,9 +1650,13 @@ export const AdminArchitectureManager: React.FC<AdminArchitectureManagerProps> =
                   fontWeight: 800,
                   fontSize: '0.88rem',
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
                 }}
               >
-                Add Floor & Open View
+                <span>Add Floor {newFloorNum === 0 ? 'Ground' : newFloorNum < 0 ? `Basement ${newFloorNum}` : `${newFloorNum}`} & Open View ➔</span>
               </button>
             </form>
           </div>
