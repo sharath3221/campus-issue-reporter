@@ -31,6 +31,7 @@ export interface MaintenanceStaff {
   specialization: StaffSpecialization;
   phone_number: string;
   is_on_duty: boolean;
+  passcode?: string; // 4-digit PIN or password for technician duty login
 }
 
 export interface AdminUser {

@@ -34,6 +34,7 @@ import {
 } from '../types';
 import { useIncidents } from '../hooks/useIncidents';
 import { QRSpotGenerator } from '../components/QRSpotGenerator';
+import { AdminStaffManager } from '../components/AdminStaffManager';
 import { getActiveAdminSession, signOutAdmin, ADMIN_SESSION_KEY } from '../lib/supabaseAuth';
 
 export const AdminDashboardPage: React.FC = () => {
@@ -43,13 +44,16 @@ export const AdminDashboardPage: React.FC = () => {
     maintenanceStaff,
     campusLocations,
     addCampusLocation,
+    addMaintenanceStaff,
+    toggleStaffDuty,
+    deleteMaintenanceStaff,
     dispatchStaff,
     resolveTicket,
     isSupabaseConnected,
   } = useIncidents();
 
   // Navigation tab
-  const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'QR_STUDIO'>('OPERATIONS');
+  const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'QR_STUDIO' | 'STAFF'>('OPERATIONS');
 
   // Admin Session Check (Strict Constraint 3 - Strictly Authenticated Sessions Only)
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
@@ -354,6 +358,39 @@ export const AdminDashboardPage: React.FC = () => {
             {campusLocations.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveNavTab('STAFF')}
+          style={{
+            padding: '12px 18px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeNavTab === 'STAFF' ? '3px solid #38BDF8' : '3px solid transparent',
+            color: activeNavTab === 'STAFF' ? '#38BDF8' : '#94A3B8',
+            fontWeight: 800,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Wrench size={16} />
+          <span>Maintenance Staff Roster</span>
+          <span
+            style={{
+              background: '#059669',
+              color: 'white',
+              fontSize: '0.65rem',
+              padding: '2px 7px',
+              borderRadius: 10,
+              fontWeight: 800,
+            }}
+          >
+            {maintenanceStaff.length}
+          </span>
+        </button>
       </div>
 
       {/* Main Content Area */}
@@ -362,6 +399,13 @@ export const AdminDashboardPage: React.FC = () => {
           <QRSpotGenerator
             campusLocations={campusLocations}
             onAddLocation={addCampusLocation}
+          />
+        ) : activeNavTab === 'STAFF' ? (
+          <AdminStaffManager
+            maintenanceStaff={maintenanceStaff}
+            onAddStaff={addMaintenanceStaff}
+            onToggleDuty={toggleStaffDuty}
+            onDeleteStaff={deleteMaintenanceStaff}
           />
         ) : (
           <>

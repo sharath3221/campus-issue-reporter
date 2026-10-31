@@ -18,6 +18,16 @@ import {
   ArrowLeft,
   Image as ImageIcon,
   CheckCheck,
+  LogIn,
+  LogOut,
+  Lock,
+  UserCheck,
+  UserX,
+  RefreshCw,
+  Briefcase,
+  AlertTriangle,
+  User,
+  KeyRound,
 } from 'lucide-react';
 import {
   IncidentCategory,
@@ -25,15 +35,49 @@ import {
   STATUS_META,
   IncidentTicket,
   StaffSpecialization,
+  MaintenanceStaff,
 } from '../types';
 import { useIncidents } from '../hooks/useIncidents';
 import { uploadIncidentMedia } from '../lib/supabaseClient';
+import {
+  getActiveStaffSession,
+  signInMaintenanceStaff,
+  signOutMaintenanceStaff,
+  STAFF_SESSION_KEY,
+} from '../lib/staffAuth';
+
+const SPECIALIZATION_BADGES: Record<StaffSpecialization, { label: string; icon: string; color: string; bg: string }> = {
+  PLUMBING: { label: 'Plumbing & Water', icon: '🚰', color: '#0288D1', bg: '#E0F2FE' },
+  ELECTRICAL: { label: 'Electrical & Power', icon: '⚡', color: '#D97706', bg: '#FEF3C7' },
+  CLEANING: { label: 'Sanitation & Hygiene', icon: '🧹', color: '#059669', bg: '#D1FAE5' },
+  CARPENTRY: { label: 'Carpentry & Desks', icon: '🪑', color: '#B45309', bg: '#FDE68A' },
+  GENERAL: { label: 'General Facilities', icon: '🔧', color: '#6366F1', bg: '#EEF2FF' },
+};
 
 export const MaintenancePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { tickets, maintenanceStaff, resolveTicket, isSupabaseConnected } =
-    useIncidents();
+  const {
+    tickets,
+    maintenanceStaff,
+    toggleStaffDuty,
+    resolveTicket,
+    isSupabaseConnected,
+  } = useIncidents();
+
+  // Technician Authentication State
+  const [currentStaff, setCurrentStaff] = useState<MaintenanceStaff | null>(() =>
+    getActiveStaffSession()
+  );
+
+  // Login form state
+  const [loginPhoneOrId, setLoginPhoneOrId] = useState('');
+  const [loginPasscode, setLoginPasscode] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Work Scope filter for authenticated technician
+  const [workScope, setWorkScope] = useState<'MY_JOBS' | 'ALL'>('MY_JOBS');
 
   // Target ticket parameter from WhatsApp dispatch link e.g. /maintenance?ticket=tick-1002
   const targetTicketId = searchParams.get('ticket');
@@ -57,6 +101,19 @@ export const MaintenancePage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep current staff session in sync if admin updates duty or details in live maintenanceStaff roster
+  useEffect(() => {
+    if (currentStaff) {
+      const live = maintenanceStaff.find((s) => s.staff_id === currentStaff.staff_id);
+      if (live && live.is_on_duty !== currentStaff.is_on_duty) {
+        setCurrentStaff(live);
+        try {
+          localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(live));
+        } catch (e) {}
+      }
+    }
+  }, [maintenanceStaff, currentStaff]);
 
   // If a ticket query param is present, automatically open resolution card for it
   useEffect(() => {
@@ -85,6 +142,51 @@ export const MaintenancePage: React.FC = () => {
     } catch (e) {
       console.log('Audio feedback error', e);
     }
+  };
+
+  // Staff Login Handler
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setIsLoggingIn(true);
+
+    try {
+      const authStaff = await signInMaintenanceStaff(
+        loginPhoneOrId,
+        loginPasscode,
+        maintenanceStaff
+      );
+      setCurrentStaff(authStaff);
+      playAudioFeedback(`Welcome on duty, ${authStaff.full_name}.`);
+    } catch (err: any) {
+      setLoginError(err.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Staff Logout Handler
+  const handleLogout = () => {
+    signOutMaintenanceStaff();
+    setCurrentStaff(null);
+    setLoginPhoneOrId('');
+    setLoginPasscode('');
+    setLoginError(null);
+    setResolvingTicket(null);
+    playAudioFeedback('Signed out from maintenance portal.');
+  };
+
+  // Toggle On-Duty / Off-Duty by technician
+  const handleToggleDutyStatus = async () => {
+    if (!currentStaff) return;
+    const newStatus = !currentStaff.is_on_duty;
+    const updated = { ...currentStaff, is_on_duty: newStatus };
+    setCurrentStaff(updated);
+    try {
+      localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(updated));
+    } catch (e) {}
+    await toggleStaffDuty(currentStaff.staff_id, newStatus);
+    playAudioFeedback(newStatus ? 'You are now marked ON DUTY.' : 'You are now marked OFF DUTY.');
   };
 
   // Live Camera Handlers
@@ -138,7 +240,6 @@ export const MaintenancePage: React.FC = () => {
     } catch (e) {
       console.error('Snapshot capture error:', e);
     } finally {
-      // Immediately release camera hardware
       closeCamera();
     }
 
@@ -149,7 +250,6 @@ export const MaintenancePage: React.FC = () => {
   };
 
   const closeCamera = () => {
-    // 1. Release tracks from video element directly
     if (videoRef.current) {
       try {
         videoRef.current.pause();
@@ -166,7 +266,6 @@ export const MaintenancePage: React.FC = () => {
       }
     }
 
-    // 2. Stop tracks from mediaStream reference
     if (mediaStreamRef.current) {
       try {
         mediaStreamRef.current.getTracks().forEach((track) => {
@@ -182,7 +281,6 @@ export const MaintenancePage: React.FC = () => {
     setIsCameraOpen(false);
   };
 
-  // Cleanup camera stream on unmount
   useEffect(() => {
     return () => {
       closeCamera();
@@ -201,7 +299,7 @@ export const MaintenancePage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Submit Resolution & Fixed Photo Proof (Upload to Supabase Storage)
+  // Submit Resolution & Fixed Photo Proof
   const handleSubmitResolution = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resolvingTicket || !fixedPhotoPreview) return;
@@ -237,6 +335,14 @@ export const MaintenancePage: React.FC = () => {
     }
   };
 
+  // Category to specialization mapping
+  const staffSpecializationMap: Record<IncidentCategory, StaffSpecialization> = {
+    WATER_SUPPLY: 'PLUMBING',
+    LIGHTS_FAN_PROJECTOR: 'ELECTRICAL',
+    WASHROOM_CLEANLINESS: 'CLEANING',
+    FURNITURE_MAINTENANCE: 'CARPENTRY',
+  };
+
   // Filtered Tickets
   const filteredTickets = tickets.filter((t) => {
     const matchesTab =
@@ -246,26 +352,396 @@ export const MaintenancePage: React.FC = () => {
 
     if (!matchesTab) return false;
 
-    if (selectedSpecialization === 'ALL') return true;
+    // Scope check: If current technician has "MY_JOBS" selected
+    if (currentStaff && workScope === 'MY_JOBS') {
+      const isDirectlyAssigned =
+        t.assigned_staff_id === currentStaff.staff_id ||
+        t.assigned_staff?.staff_id === currentStaff.staff_id;
+      const isMyTrade = staffSpecializationMap[t.category] === currentStaff.specialization;
 
-    const staffSpecializationMap: Record<IncidentCategory, StaffSpecialization> = {
-      WATER_SUPPLY: 'PLUMBING',
-      LIGHTS_FAN_PROJECTOR: 'ELECTRICAL',
-      WASHROOM_CLEANLINESS: 'CLEANING',
-      FURNITURE_MAINTENANCE: 'CARPENTRY',
-    };
+      if (!isDirectlyAssigned && !isMyTrade) {
+        return false;
+      }
+    }
+
+    if (selectedSpecialization === 'ALL') return true;
 
     return staffSpecializationMap[t.category] === selectedSpecialization;
   });
 
+  // Calculate my jobs count vs all jobs count
+  const myPendingCount = currentStaff
+    ? tickets.filter((t) => {
+        if (t.status === 'RESOLVED') return false;
+        const isAssigned =
+          t.assigned_staff_id === currentStaff.staff_id ||
+          t.assigned_staff?.staff_id === currentStaff.staff_id;
+        const isTrade = staffSpecializationMap[t.category] === currentStaff.specialization;
+        return isAssigned || isTrade;
+      }).length
+    : 0;
+
+  const allPendingCount = tickets.filter((t) => t.status !== 'RESOLVED').length;
+
+  // -------------------------------------------------------------
+  // VIEW A: UNAUTHENTICATED TECHNICIAN LOGIN SCREEN
+  // -------------------------------------------------------------
+  if (!currentStaff) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', flexDirection: 'column' }}>
+        {/* Simple Header */}
+        <header
+          style={{
+            background: 'rgba(15, 23, 42, 0.95)',
+            backdropFilter: 'blur(10px)',
+            borderBottom: '1px solid #1E293B',
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+              }}
+            >
+              <Wrench size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em' }}>
+                CampusPulse
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#FCD34D', fontWeight: 700 }}>
+                Maintenance Staff Portal
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => navigate('/report')}
+            style={{
+              background: '#1E293B',
+              border: '1px solid #334155',
+              borderRadius: 8,
+              padding: '6px 12px',
+              color: '#94A3B8',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <ArrowLeft size={14} />
+            <span>Public Report</span>
+          </button>
+        </header>
+
+        {/* Login Body */}
+        <main
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 440,
+              background: '#1E293B',
+              borderRadius: 20,
+              border: '1px solid #334155',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+              padding: 28,
+            }}
+          >
+            {/* Title & Badge */}
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 16,
+                  background: 'linear-gradient(135deg, #F59E0B 0%, #B45309 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  margin: '0 auto 14px',
+                  boxShadow: '0 8px 24px rgba(245, 158, 11, 0.35)',
+                }}
+              >
+                <LogIn size={28} />
+              </div>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: 900, color: 'white', marginBottom: 6 }}>
+                Technician Duty Sign In
+              </h1>
+              <p style={{ fontSize: '0.82rem', color: '#94A3B8', lineHeight: 1.4 }}>
+                Sign in with your registered phone number or Staff ID and 4-digit PIN to access work orders.
+              </p>
+            </div>
+
+            {/* Error Banner */}
+            {loginError && (
+              <div
+                style={{
+                  background: '#7F1D1D',
+                  border: '1px solid #DC2626',
+                  borderRadius: 10,
+                  padding: '10px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: '#FECACA',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  marginBottom: 16,
+                }}
+              >
+                <AlertCircle size={16} color="#F87171" style={{ flexShrink: 0 }} />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            {/* Login Form */}
+            <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: '#CBD5E1',
+                    marginBottom: 6,
+                  }}
+                >
+                  Phone Number or Staff ID:
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Phone
+                    size={16}
+                    color="#64748B"
+                    style={{ position: 'absolute', left: 12, top: 12, pointerEvents: 'none' }}
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. +91 98765 43210 or stf-101"
+                    value={loginPhoneOrId}
+                    onChange={(e) => setLoginPhoneOrId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 12px 11px 36px',
+                      borderRadius: 10,
+                      background: '#0F172A',
+                      border: '1px solid #334155',
+                      color: 'white',
+                      fontSize: '0.9rem',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: '#CBD5E1',
+                    marginBottom: 6,
+                  }}
+                >
+                  Passcode / PIN (Default: 1234):
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Lock
+                    size={16}
+                    color="#64748B"
+                    style={{ position: 'absolute', left: 12, top: 12, pointerEvents: 'none' }}
+                  />
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter 4-digit PIN"
+                    value={loginPasscode}
+                    onChange={(e) => setLoginPasscode(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 12px 11px 36px',
+                      borderRadius: 10,
+                      background: '#0F172A',
+                      border: '1px solid #334155',
+                      color: 'white',
+                      fontSize: '0.9rem',
+                      boxSizing: 'border-box',
+                      letterSpacing: '0.2em',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoggingIn}
+                style={{
+                  marginTop: 6,
+                  padding: 13,
+                  borderRadius: 12,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                  color: 'white',
+                  fontWeight: 900,
+                  fontSize: '0.95rem',
+                  cursor: isLoggingIn ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)',
+                }}
+              >
+                {isLoggingIn ? (
+                  <span>Verifying Credentials...</span>
+                ) : (
+                  <>
+                    <LogIn size={18} />
+                    <span>Sign In to Field Portal ➔</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Quick Staff Demo Picker for Testing */}
+            {maintenanceStaff.length > 0 && (
+              <div
+                style={{
+                  marginTop: 24,
+                  paddingTop: 18,
+                  borderTop: '1px solid #334155',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    color: '#94A3B8',
+                    textTransform: 'uppercase',
+                    marginBottom: 8,
+                    letterSpacing: '0.04em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Sparkles size={13} color="#F59E0B" />
+                  <span>Tap to Auto-Fill Registered Technician:</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {maintenanceStaff.slice(0, 4).map((s) => {
+                    const badge = SPECIALIZATION_BADGES[s.specialization] || SPECIALIZATION_BADGES.GENERAL;
+                    return (
+                      <button
+                        key={s.staff_id}
+                        type="button"
+                        onClick={() => {
+                          setLoginPhoneOrId(s.phone_number);
+                          setLoginPasscode(s.passcode || '1234');
+                          setLoginError(null);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '7px 10px',
+                          borderRadius: 8,
+                          background: '#0F172A',
+                          border: '1px solid #334155',
+                          color: '#E2E8F0',
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{badge.icon}</span>
+                          <span>{s.full_name}</span>
+                          <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>({badge.label})</span>
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: '#38BDF8', fontFamily: 'monospace' }}>
+                          PIN: {s.passcode || '1234'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Administrator Notice */}
+            <div
+              style={{
+                marginTop: 18,
+                background: '#0F172A',
+                borderRadius: 10,
+                padding: '10px 12px',
+                border: '1px solid #334155',
+                fontSize: '0.72rem',
+                color: '#94A3B8',
+                lineHeight: 1.4,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+              }}
+            >
+              <Shield size={16} color="#60A5FA" style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <strong>Admin Provisioned:</strong> New staff members can be added and managed by administrators in the{' '}
+                <span
+                  onClick={() => navigate('/admin/dashboard')}
+                  style={{ color: '#38BDF8', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Admin Portal Roster
+                </span>
+                .
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // VIEW B: AUTHENTICATED TECHNICIAN FIELD PORTAL
+  // -------------------------------------------------------------
+  const staffBadge = SPECIALIZATION_BADGES[currentStaff.specialization] || SPECIALIZATION_BADGES.GENERAL;
+
   return (
     <div style={{ minHeight: '100vh', background: '#F1F5F9', paddingBottom: 80 }}>
-      {/* High-Contrast Mobile Header for Maintenance Staff */}
+      {/* High-Contrast Mobile Header with Technician Info & Controls */}
       <header
         style={{
           background: '#0F172A',
           color: 'white',
-          padding: '14px 20px',
+          padding: '12px 18px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -278,32 +754,73 @@ export const MaintenancePage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div
             style={{
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               borderRadius: 10,
               background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'white',
+              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
             }}
           >
             <Wrench size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-              Maintenance Field Portal
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '1rem', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+                {currentStaff.full_name}
+              </span>
+              <span
+                style={{
+                  background: staffBadge.bg,
+                  color: staffBadge.color,
+                  fontSize: '0.65rem',
+                  fontWeight: 900,
+                  padding: '1px 6px',
+                  borderRadius: 6,
+                }}
+              >
+                {staffBadge.icon} {staffBadge.label}
+              </span>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#FCD34D', fontWeight: 700 }}>
-              CampusPulse On-Duty Staff
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+              {/* Duty Toggle Pill */}
+              <button
+                type="button"
+                onClick={handleToggleDutyStatus}
+                style={{
+                  background: currentStaff.is_on_duty ? '#065F46' : '#7F1D1D',
+                  color: currentStaff.is_on_duty ? '#A7F3D0' : '#FECACA',
+                  border: `1px solid ${currentStaff.is_on_duty ? '#059669' : '#DC2626'}`,
+                  borderRadius: 12,
+                  padding: '2px 8px',
+                  fontSize: '0.68rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                title="Tap to switch between On-Duty and Off-Duty"
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: currentStaff.is_on_duty ? '#10B981' : '#EF4444' }} />
+                <span>{currentStaff.is_on_duty ? 'ON DUTY' : 'OFF DUTY'}</span>
+              </button>
+
+              <span style={{ fontSize: '0.68rem', color: '#94A3B8', fontFamily: 'monospace' }}>
+                ID: {currentStaff.staff_id}
+              </span>
             </div>
           </div>
         </div>
 
+        {/* Action Controls: Live Status & Sign Out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span
             style={{
-              fontSize: '0.72rem',
+              fontSize: '0.7rem',
               fontWeight: 800,
               background: '#1E293B',
               color: '#38BDF8',
@@ -312,97 +829,196 @@ export const MaintenancePage: React.FC = () => {
               border: '1px solid #334155',
             }}
           >
-            {isSupabaseConnected ? '🟢 Live Cloud' : '🟡 Offline Mode'}
+            {isSupabaseConnected ? '🟢 Live' : '🟡 Local'}
           </span>
           <button
-            onClick={() => navigate('/report')}
+            onClick={handleLogout}
             style={{
               background: '#334155',
-              border: 'none',
+              border: '1px solid #475569',
               borderRadius: 8,
               padding: '6px 10px',
-              color: 'white',
+              color: '#F1F5F9',
               fontSize: '0.72rem',
-              fontWeight: 700,
+              fontWeight: 800,
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
             }}
+            title="Sign out of technician duty"
           >
-            Exit
+            <LogOut size={13} />
+            <span>Sign Out</span>
           </button>
         </div>
       </header>
 
       {/* Main Container */}
-      <main style={{ maxWidth: 600, margin: '0 auto', padding: 16 }}>
-        {/* Banner with Duty Staff info */}
-        <div
-          style={{
-            background: 'white',
-            borderRadius: 16,
-            padding: '14px 18px',
-            border: '1px solid #CBD5E1',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-            marginBottom: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B' }}>
-              FIELD REPAIR DISPATCH CENTER
-            </div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#0F172A', marginTop: 2 }}>
-              Upload Fixed Photo Proof to close work orders
-            </div>
-          </div>
+      <main style={{ maxWidth: 640, margin: '0 auto', padding: 16 }}>
+        {/* Off Duty Alert (if technician is off duty) */}
+        {!currentStaff.is_on_duty && (
           <div
             style={{
               background: '#FEF3C7',
-              color: '#B45309',
-              padding: '6px 12px',
-              borderRadius: 10,
-              fontWeight: 900,
-              fontSize: '0.85rem',
-              textAlign: 'center',
+              borderRadius: 14,
+              padding: '12px 16px',
+              border: '1px solid #F59E0B',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
             }}
           >
-            {tickets.filter((t) => t.status !== 'RESOLVED').length} Active Jobs
-          </div>
-        </div>
-
-        {/* Specialization Filter Pills */}
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 12 }}>
-          {(
-            [
-              { id: 'ALL', label: 'All Jobs 📋' },
-              { id: 'PLUMBING', label: '🚰 Plumbing' },
-              { id: 'ELECTRICAL', label: '⚡ Electrical' },
-              { id: 'CLEANING', label: '🧹 Cleaning' },
-              { id: 'CARPENTRY', label: '🪑 Carpentry' },
-            ] as const
-          ).map((item) => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#92400E' }}>
+                  You are currently marked OFF DUTY
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#B45309' }}>
+                  Live dispatches are paused. Toggle to On Duty to receive new campus tasks.
+                </div>
+              </div>
+            </div>
             <button
-              key={item.id}
-              onClick={() => setSelectedSpecialization(item.id)}
+              onClick={handleToggleDutyStatus}
               style={{
-                padding: '6px 14px',
-                borderRadius: 20,
-                border: selectedSpecialization === item.id ? '2px solid #0288D1' : '1px solid #CBD5E1',
-                background: selectedSpecialization === item.id ? '#0288D1' : 'white',
-                color: selectedSpecialization === item.id ? 'white' : '#475569',
-                fontSize: '0.78rem',
+                background: '#10B981',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '6px 12px',
+                fontSize: '0.75rem',
                 fontWeight: 800,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
             >
-              {item.label}
+              Go On Duty
             </button>
-          ))}
+          </div>
+        )}
+
+        {/* WORK SCOPE SWITCHER (My Assigned Tasks vs All Jobs) */}
+        <div
+          style={{
+            background: 'white',
+            borderRadius: 16,
+            padding: 4,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            border: '1px solid #CBD5E1',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+            marginBottom: 14,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setWorkScope('MY_JOBS')}
+            style={{
+              padding: '10px 12px',
+              borderRadius: 12,
+              border: 'none',
+              background: workScope === 'MY_JOBS' ? '#0F172A' : 'transparent',
+              color: workScope === 'MY_JOBS' ? 'white' : '#64748B',
+              fontWeight: 800,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Briefcase size={15} />
+            <span>My Assigned & Trade Tasks</span>
+            <span
+              style={{
+                background: workScope === 'MY_JOBS' ? '#F59E0B' : '#E2E8F0',
+                color: workScope === 'MY_JOBS' ? 'white' : '#475569',
+                fontSize: '0.7rem',
+                padding: '1px 6px',
+                borderRadius: 10,
+                fontWeight: 900,
+              }}
+            >
+              {myPendingCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setWorkScope('ALL')}
+            style={{
+              padding: '10px 12px',
+              borderRadius: 12,
+              border: 'none',
+              background: workScope === 'ALL' ? '#0F172A' : 'transparent',
+              color: workScope === 'ALL' ? 'white' : '#64748B',
+              fontWeight: 800,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Layers size={15} />
+            <span>All Campus Jobs</span>
+            <span
+              style={{
+                background: workScope === 'ALL' ? '#3B82F6' : '#E2E8F0',
+                color: workScope === 'ALL' ? 'white' : '#475569',
+                fontSize: '0.7rem',
+                padding: '1px 6px',
+                borderRadius: 10,
+                fontWeight: 900,
+              }}
+            >
+              {allPendingCount}
+            </span>
+          </button>
         </div>
 
-        {/* Status Tabs (Dispatched Jobs vs Completed History) */}
+        {/* Trade Category Filter Pills (When Viewing All Jobs or filtering) */}
+        {workScope === 'ALL' && (
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 12 }}>
+            {(
+              [
+                { id: 'ALL', label: 'All Trades 📋' },
+                { id: 'PLUMBING', label: '🚰 Plumbing' },
+                { id: 'ELECTRICAL', label: '⚡ Electrical' },
+                { id: 'CLEANING', label: '🧹 Cleaning' },
+                { id: 'CARPENTRY', label: '🪑 Carpentry' },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setSelectedSpecialization(item.id)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  border: selectedSpecialization === item.id ? '2px solid #0288D1' : '1px solid #CBD5E1',
+                  background: selectedSpecialization === item.id ? '#0288D1' : 'white',
+                  color: selectedSpecialization === item.id ? 'white' : '#475569',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Status Tabs (Pending Repair vs Completed History) */}
         <div
           style={{
             display: 'grid',
@@ -427,7 +1043,7 @@ export const MaintenancePage: React.FC = () => {
               boxShadow: activeTab === 'DISPATCHED' ? '0 2px 4px rgba(0,0,0,0.06)' : 'none',
             }}
           >
-            Pending Repair ({tickets.filter((t) => t.status !== 'RESOLVED').length})
+            Pending Repair ({workScope === 'MY_JOBS' ? myPendingCount : allPendingCount})
           </button>
           <button
             onClick={() => setActiveTab('RESOLVED')}
@@ -828,11 +1444,17 @@ export const MaintenancePage: React.FC = () => {
             >
               <CheckCircle2 size={40} color="#10B981" style={{ margin: '0 auto 10px' }} />
               <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
-                {activeTab === 'DISPATCHED' ? 'No Pending Work Orders!' : 'No Resolved Jobs in this category.'}
+                {activeTab === 'DISPATCHED'
+                  ? workScope === 'MY_JOBS'
+                    ? 'No Pending Tasks Assigned to You!'
+                    : 'No Pending Work Orders on Campus!'
+                  : 'No Resolved Jobs in this category.'}
               </div>
               <p style={{ fontSize: '0.8rem', marginTop: 4 }}>
                 {activeTab === 'DISPATCHED'
-                  ? 'All campus facility incidents are currently serviced or waiting for dispatch.'
+                  ? workScope === 'MY_JOBS'
+                    ? 'All tasks matching your trade or assigned queue are completed. Switch to "All Campus Jobs" to see other departments.'
+                    : 'All campus facility incidents are currently serviced or waiting for dispatch.'
                   : 'Resolved tickets will appear here with proof photos.'}
               </p>
             </div>
@@ -840,6 +1462,9 @@ export const MaintenancePage: React.FC = () => {
             filteredTickets.map((ticket) => {
               const meta = CATEGORY_META[ticket.category];
               const isTarget = targetTicketId === ticket.ticket_id;
+              const isAssignedToMe =
+                ticket.assigned_staff_id === currentStaff.staff_id ||
+                ticket.assigned_staff?.staff_id === currentStaff.staff_id;
 
               return (
                 <div
@@ -848,15 +1473,19 @@ export const MaintenancePage: React.FC = () => {
                     background: 'white',
                     borderRadius: 16,
                     padding: 16,
-                    border: isTarget ? '2px solid #0288D1' : '1px solid #E2E8F0',
+                    border: isTarget
+                      ? '2px solid #0288D1'
+                      : isAssignedToMe
+                      ? '2px solid #F59E0B'
+                      : '1px solid #E2E8F0',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 12,
                   }}
                 >
-                  {/* Top Row: Ticket ID + Category + Duplicate Badge */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  {/* Top Row: Ticket ID + Category + Duplicate Badge + Assigned to You Badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span
                         style={{
@@ -887,6 +1516,26 @@ export const MaintenancePage: React.FC = () => {
                         <span>{meta.icon}</span>
                         <span>{meta.label}</span>
                       </span>
+
+                      {isAssignedToMe && (
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 900,
+                            background: '#FEF3C7',
+                            color: '#B45309',
+                            padding: '2px 8px',
+                            borderRadius: 10,
+                            border: '1px solid #FDE68A',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <User size={12} />
+                          <span>Assigned to You</span>
+                        </span>
+                      )}
                     </div>
 
                     {/* Duplicate Count Badge */}
@@ -921,8 +1570,8 @@ export const MaintenancePage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Assigned Staff if dispatched */}
-                  {ticket.assigned_staff && (
+                  {/* Assigned Staff if dispatched to someone else */}
+                  {ticket.assigned_staff && !isAssignedToMe && (
                     <div
                       style={{
                         background: '#FFFBEB',
@@ -984,7 +1633,9 @@ export const MaintenancePage: React.FC = () => {
                           flex: 1,
                           padding: '12px',
                           borderRadius: 12,
-                          background: 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
+                          background: isAssignedToMe
+                            ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)'
+                            : 'linear-gradient(135deg, #0288D1 0%, #01579B 100%)',
                           color: 'white',
                           border: 'none',
                           fontWeight: 800,
@@ -994,6 +1645,9 @@ export const MaintenancePage: React.FC = () => {
                           alignItems: 'center',
                           justifyContent: 'center',
                           gap: 6,
+                          boxShadow: isAssignedToMe
+                            ? '0 4px 12px rgba(245, 158, 11, 0.3)'
+                            : '0 4px 12px rgba(2, 136, 209, 0.3)',
                         }}
                       >
                         <Camera size={16} />
@@ -1010,4 +1664,3 @@ export const MaintenancePage: React.FC = () => {
     </div>
   );
 };
-

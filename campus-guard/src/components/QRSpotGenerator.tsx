@@ -14,10 +14,7 @@ import {
   Shield,
   Search,
   Check,
-  Smartphone,
   Globe,
-  Wifi,
-  AlertTriangle,
 } from 'lucide-react';
 import { CampusLocation } from '../types';
 
@@ -39,11 +36,8 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     useState<CampusLocation['zone_category']>('CLASSROOM');
   const [fixtureId, setFixtureId] = useState<string>('FAN-01');
 
-  // Production Base URL: Auto-detects production domain, or allows admin to set custom institutional domain
-  const [productionDomain, setProductionDomain] = useState<string>(() => {
-    const saved = localStorage.getItem('campuspulse_prod_domain');
-    if (saved) return saved;
-    // In production, use live origin automatically
+  // Target Domain: Auto-detects production origin or defaults to live Vercel URL
+  const effectiveDomain = (() => {
     if (
       typeof window !== 'undefined' &&
       window.location.hostname !== 'localhost' &&
@@ -51,11 +45,8 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     ) {
       return window.location.origin;
     }
-    // Default production domain or fallback
     return 'https://campus-issue-reporter.vercel.app';
-  });
-
-  const effectiveDomain = (productionDomain.trim() || window.location.origin).replace(/\/$/, '');
+  })().replace(/\/$/, '');
 
   // Generated QR & Card State
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -412,91 +403,6 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                 Create printable QR stickers for any Building, Floor, Room, or Fixture and register them in Supabase
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* Production URL Configuration */}
-        <div
-          style={{
-            background: '#F8FAFC',
-            border: '1.5px solid #E2E8F0',
-            borderRadius: 14,
-            padding: '12px 18px',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 12,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                background: '#E0F2FE',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#0288D1',
-              }}
-            >
-              <Globe size={18} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0F172A' }}>
-                Production QR Target Domain
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                All generated placards & stickers encode this live URL for students/staff scanning across campus
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <input
-              type="url"
-              value={productionDomain}
-              onChange={(e) => {
-                setProductionDomain(e.target.value);
-                localStorage.setItem('campuspulse_prod_domain', e.target.value);
-              }}
-              placeholder="https://campus-issue-reporter.vercel.app"
-              style={{
-                padding: '7px 12px',
-                borderRadius: 8,
-                border: '1.5px solid #CBD5E1',
-                fontSize: '0.82rem',
-                fontWeight: 700,
-                width: 310,
-                color: '#0F172A',
-                background: 'white',
-                boxSizing: 'border-box',
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setProductionDomain(window.location.origin);
-                localStorage.setItem('campuspulse_prod_domain', window.location.origin);
-              }}
-              style={{
-                padding: '7px 12px',
-                borderRadius: 8,
-                border: '1px solid #CBD5E1',
-                background: 'white',
-                fontSize: '0.74rem',
-                fontWeight: 800,
-                color: '#0288D1',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              title="Set to current browser origin"
-            >
-              Set Current ({window.location.host})
-            </button>
           </div>
         </div>
 

@@ -33,12 +33,13 @@ CREATE TABLE campus_locations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3.2 Maintenance Staff (On-Duty Personnel for WhatsApp/SMS Dispatch)
+-- 3.2 Maintenance Staff (On-Duty Personnel for WhatsApp/SMS Dispatch & Duty Login)
 CREATE TABLE maintenance_staff (
     staff_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(150) NOT NULL,
     specialization VARCHAR(50) NOT NULL CHECK (specialization IN ('PLUMBING', 'ELECTRICAL', 'CLEANING', 'CARPENTRY', 'GENERAL')),
     phone_number VARCHAR(20) NOT NULL,   -- e.g., '+919876543210'
+    passcode VARCHAR(50) DEFAULT '1234', -- 4-digit PIN or password for technician login
     is_on_duty BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -155,9 +156,29 @@ CREATE POLICY "Public can view media"
     TO anon, authenticated
     USING (true);
 
--- 4.4 Maintenance Staff: Read-only for public dispatch reference
+-- 4.4 Maintenance Staff: Viewable and Manageable by Admins & Staff
+DROP POLICY IF EXISTS "Public can view on-duty maintenance staff" ON maintenance_staff;
 CREATE POLICY "Public can view on-duty maintenance staff"
     ON maintenance_staff FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+DROP POLICY IF EXISTS "Admins can insert maintenance staff" ON maintenance_staff;
+CREATE POLICY "Admins can insert maintenance staff"
+    ON maintenance_staff FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admins can update maintenance staff" ON maintenance_staff;
+CREATE POLICY "Admins can update maintenance staff"
+    ON maintenance_staff FOR UPDATE
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admins can delete maintenance staff" ON maintenance_staff;
+CREATE POLICY "Admins can delete maintenance staff"
+    ON maintenance_staff FOR DELETE
     TO anon, authenticated
     USING (true);
 
@@ -171,7 +192,7 @@ CREATE POLICY "Admins view admin accounts"
 -- 5. Supabase Realtime Replication
 -- ==============================================================================
 
--- Enable Realtime events for live dispatch updates on Admin Map & Public Spot Badge (Idempotent)
+-- Enable Realtime events for live dispatch updates on Admin Map, Staff Roster & Public Spot Badge (Idempotent)
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -193,6 +214,13 @@ BEGIN
         WHERE pubname = 'supabase_realtime' AND tablename = 'campus_locations'
     ) THEN
         ALTER PUBLICATION supabase_realtime ADD TABLE campus_locations;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'maintenance_staff'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE maintenance_staff;
     END IF;
 END $$;
 

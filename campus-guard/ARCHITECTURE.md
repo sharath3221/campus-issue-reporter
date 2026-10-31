@@ -101,12 +101,20 @@ flowchart TD
 
 ### 3.4 Dedicated Maintenance Staff Portal (`/maintenance`)
 - Mobile-first portal optimized for field technicians (plumbers, electricians, janitors).
+- **Technician Authentication & Duty Session:** Gated by registered Phone Number / Staff ID and 4-digit PIN/Passcode (`staffAuth.ts`), persisting session in `campuspulse_staff_session`.
+- **Duty Shift Management:** Live On-Duty / Off-Duty status toggle with audio feedback and real-time Supabase sync.
+- **Role-Scoped Task Filter:** Toggle between "My Assigned & Trade Tasks" (filtered by staff ID or specialization) and "All Campus Jobs".
 - Receives deep-links from WhatsApp dispatch alerts (`/maintenance?ticket=tick-1002`).
 - **Before vs After Visual Comparison:** Displays the student's original defect photo side-by-side with the technician's live camera repair proof.
 - **One-Tap Resolution:** Uploads the repaired photo directly to the `incident-media` Supabase Storage bucket and marks the ticket `RESOLVED`, instantly updating the public spot QR badge.
 
 ### 3.5 Executive Admin Portal (`/admin/*`)
 - **Authentication:** Supabase Auth for Google Sign-In and institutional passkeys.
+- **Maintenance Staff Roster Management:** Complete administrative panel under the "Maintenance Staff Roster" tab to:
+  - Register new technicians (Full Name, Trade Specialization, Phone Number, Login Passcode/PIN, Duty Status).
+  - 1-click On-Duty / Off-Duty status toggles.
+  - Delete / remove staff members.
+  - Persisted to Supabase `maintenance_staff` table and synced in real time across the portal.
 - **Live 2D Spatial Floor Map:** Interactive SVG floor map with multi-floor selector (Floors 1, 2, 3) and status pins (🔴 Urgent, 🟡 Dispatched, 🟢 Resolved).
 - **One-Click WhatsApp Dispatch:** Generates pre-formatted work order messages with deep links to `/maintenance` and dispatches via Supabase Edge Function `dispatch-alert`.
 - **Spot QR Sticker Generator Studio:**

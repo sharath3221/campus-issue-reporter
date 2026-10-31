@@ -8,13 +8,14 @@ import {
 } from '../types';
 import {
   campusLocations as defaultLocations,
-  maintenanceStaff,
+  maintenanceStaff as defaultStaff,
   initialIncidentTickets,
 } from '../data/mockData';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 const TICKETS_STORAGE_KEY = 'campuspulse_tickets_v1';
 const LOCATIONS_STORAGE_KEY = 'campuspulse_locations_v1';
+const STAFF_STORAGE_KEY = 'campuspulse_staff_v1';
 
 export function useIncidents() {
   // 1. Campus Locations State (Dynamic & Realtime)
@@ -54,6 +55,20 @@ export function useIncidents() {
     return initialIncidentTickets;
   });
 
+  // 3. Maintenance Staff State (Dynamic, Realtime & Admin Managed)
+  const [staffList, setStaffList] = useState<MaintenanceStaff[]>(() => {
+    try {
+      const saved = localStorage.getItem(STAFF_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed reading staff from localStorage', e);
+    }
+    return defaultStaff;
+  });
+
   const [isLoading, setIsLoading] = useState<boolean>(isSupabaseConfigured);
 
   // Sync tickets to localStorage
@@ -73,6 +88,15 @@ export function useIncidents() {
       console.error('Failed writing locations to localStorage', e);
     }
   }, [locations]);
+
+  // Sync staffList to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(staffList));
+    } catch (e) {
+      console.error('Failed writing staff to localStorage', e);
+    }
+  }, [staffList]);
 
   // Fetch from Supabase and subscribe to Realtime
   useEffect(() => {
@@ -132,7 +156,7 @@ export function useIncidents() {
             assigned_staff_id: row.assigned_staff_id,
             assigned_staff:
               row.assigned_staff ||
-              maintenanceStaff.find((s) => s.staff_id === row.assigned_staff_id),
+              staffList.find((s) => s.staff_id === row.assigned_staff_id),
             reported_at: row.reported_at,
             dispatched_at: row.dispatched_at,
             resolved_at: row.resolved_at,
@@ -149,6 +173,33 @@ export function useIncidents() {
 
     fetchSupabaseLocations();
     fetchSupabaseTickets();
+
+    // 3. Fetch live staff from Supabase
+    async function fetchSupabaseStaff() {
+      try {
+        const { data, error } = await supabase!
+          .from('maintenance_staff')
+          .select('*')
+          .order('full_name', { ascending: true });
+
+        if (!error && data && data.length > 0 && isMounted) {
+          const mappedStaff: MaintenanceStaff[] = data.map((s: any) => ({
+            staff_id: s.staff_id,
+            full_name: s.full_name,
+            specialization: s.specialization,
+            phone_number: s.phone_number,
+            is_on_duty: s.is_on_duty,
+            passcode: s.passcode || '1234',
+          }));
+          setStaffList(mappedStaff);
+          localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(mappedStaff));
+        }
+      } catch (err) {
+        console.warn('Notice: Error fetching staff from Supabase:', err);
+      }
+    }
+
+    fetchSupabaseStaff();
 
     // Supabase Realtime Subscription for tickets
     const ticketChannel = supabase!
@@ -176,7 +227,7 @@ export function useIncidents() {
                 fixed_photo_url: newRow.fixed_photo_url,
                 ai_vision_tags: newRow.ai_vision_tags || [],
                 assigned_staff_id: newRow.assigned_staff_id,
-                assigned_staff: maintenanceStaff.find((s) => s.staff_id === newRow.assigned_staff_id),
+                assigned_staff: staffList.find((s) => s.staff_id === newRow.assigned_staff_id),
                 reported_at: newRow.reported_at,
                 dispatched_at: newRow.dispatched_at,
                 resolved_at: newRow.resolved_at,
@@ -197,7 +248,7 @@ export function useIncidents() {
                       ai_vision_tags: updated.ai_vision_tags || t.ai_vision_tags,
                       assigned_staff_id: updated.assigned_staff_id || t.assigned_staff_id,
                       assigned_staff:
-                        maintenanceStaff.find((s) => s.staff_id === updated.assigned_staff_id) ||
+                        staffList.find((s) => s.staff_id === updated.assigned_staff_id) ||
                         t.assigned_staff,
                       fixed_photo_url: updated.fixed_photo_url || t.fixed_photo_url,
                       dispatched_at: updated.dispatched_at || t.dispatched_at,
@@ -231,10 +282,40 @@ export function useIncidents() {
       )
       .subscribe();
 
+    // Supabase Realtime Subscription for maintenance_staff
+    const staffChannel = supabase!
+      .channel('public:maintenance_staff')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'maintenance_staff' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const row = payload.new as MaintenanceStaff;
+            setStaffList((prev) => {
+              const filtered = prev.filter((s) => s.staff_id !== row.staff_id);
+              const updated = [...filtered, row];
+              localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(updated));
+              return updated;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = (payload.old as any)?.staff_id;
+            if (oldId) {
+              setStaffList((prev) => {
+                const updated = prev.filter((s) => s.staff_id !== oldId);
+                localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(updated));
+                return updated;
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       isMounted = false;
       supabase!.removeChannel(ticketChannel);
       supabase!.removeChannel(locationsChannel);
+      supabase!.removeChannel(staffChannel);
     };
   }, []);
 
@@ -320,7 +401,7 @@ export function useIncidents() {
 
       return true;
     },
-    []
+    [staffList, tickets]
   );
 
   // Submit report with Smart Duplicate Clustering & Supabase Ingestion
@@ -505,7 +586,7 @@ export function useIncidents() {
   // Dispatch work order to maintenance staff (via WhatsApp/SMS)
   const dispatchStaff = useCallback(
     (ticketId: string, staffId: string) => {
-      const staffMember = maintenanceStaff.find((s) => s.staff_id === staffId);
+      const staffMember = staffList.find((s) => s.staff_id === staffId);
       const dispatchedAt = new Date().toISOString();
 
       setTickets((prev) =>
@@ -564,7 +645,7 @@ export function useIncidents() {
         }
       }
     },
-    []
+    [staffList, tickets]
   );
 
   // Mark ticket as resolved with fixed photo proof
@@ -623,13 +704,131 @@ export function useIncidents() {
     [tickets]
   );
 
+  // Add / Register a new Maintenance Staff member (Admin Permission)
+  const addMaintenanceStaff = useCallback(
+    async (
+      staffData: Omit<MaintenanceStaff, 'staff_id'> & { staff_id?: string; passcode?: string }
+    ): Promise<boolean> => {
+      const newStaff: MaintenanceStaff = {
+        staff_id: staffData.staff_id || `staff-${Date.now().toString().slice(-6)}`,
+        full_name: staffData.full_name.trim(),
+        specialization: staffData.specialization,
+        phone_number: staffData.phone_number.trim(),
+        is_on_duty: staffData.is_on_duty ?? true,
+        passcode: staffData.passcode?.trim() || '1234',
+      };
+
+      // 1. Update local reactive state
+      setStaffList((prev) => {
+        const filtered = prev.filter((s) => s.staff_id !== newStaff.staff_id);
+        const updated = [...filtered, newStaff];
+        try {
+          localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      // 2. Persist to Supabase database
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { error } = await supabase.from('maintenance_staff').upsert(
+            {
+              staff_id: newStaff.staff_id,
+              full_name: newStaff.full_name,
+              specialization: newStaff.specialization,
+              phone_number: newStaff.phone_number,
+              is_on_duty: newStaff.is_on_duty,
+              passcode: newStaff.passcode,
+            },
+            { onConflict: 'staff_id' }
+          );
+
+          if (error) {
+            console.warn('Supabase staff upsert notice:', error);
+            // Fallback without passcode column if not migrated
+            if (error.message?.includes('passcode')) {
+              await supabase.from('maintenance_staff').upsert({
+                staff_id: newStaff.staff_id,
+                full_name: newStaff.full_name,
+                specialization: newStaff.specialization,
+                phone_number: newStaff.phone_number,
+                is_on_duty: newStaff.is_on_duty,
+              });
+            }
+          }
+          return true;
+        } catch (err) {
+          console.warn('Supabase staff error:', err);
+          return true;
+        }
+      }
+
+      return true;
+    },
+    []
+  );
+
+  // Toggle on-duty status of a maintenance staff member
+  const toggleStaffDuty = useCallback(
+    async (staffId: string, isOnDuty: boolean): Promise<boolean> => {
+      setStaffList((prev) => {
+        const updated = prev.map((s) =>
+          s.staff_id === staffId ? { ...s, is_on_duty: isOnDuty } : s
+        );
+        try {
+          localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase
+            .from('maintenance_staff')
+            .update({ is_on_duty: isOnDuty })
+            .eq('staff_id', staffId);
+        } catch (e) {
+          console.warn('Error updating duty status in Supabase', e);
+        }
+      }
+      return true;
+    },
+    []
+  );
+
+  // Delete / Remove a maintenance staff member
+  const deleteMaintenanceStaff = useCallback(
+    async (staffId: string): Promise<boolean> => {
+      setStaffList((prev) => {
+        const updated = prev.filter((s) => s.staff_id !== staffId);
+        try {
+          localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('maintenance_staff').delete().eq('staff_id', staffId);
+        } catch (e) {
+          console.warn('Error deleting staff from Supabase', e);
+        }
+      }
+      return true;
+    },
+    []
+  );
+
   return {
     tickets,
     isLoading,
     isSupabaseConnected: isSupabaseConfigured,
     campusLocations: locations,
-    maintenanceStaff,
+    maintenanceStaff: staffList,
     addCampusLocation,
+    addMaintenanceStaff,
+    toggleStaffDuty,
+    deleteMaintenanceStaff,
     submitReport,
     dispatchStaff,
     resolveTicket,

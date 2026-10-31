@@ -87,6 +87,7 @@ export const maintenanceStaff: MaintenanceStaff[] = [
     specialization: 'PLUMBING',
     phone_number: '+919876543210',
     is_on_duty: true,
+    passcode: '1234',
   },
   {
     staff_id: 'staff-elec-02',
@@ -94,6 +95,7 @@ export const maintenanceStaff: MaintenanceStaff[] = [
     specialization: 'ELECTRICAL',
     phone_number: '+919876543211',
     is_on_duty: true,
+    passcode: '1234',
   },
   {
     staff_id: 'staff-clean-03',
@@ -101,6 +103,7 @@ export const maintenanceStaff: MaintenanceStaff[] = [
     specialization: 'CLEANING',
     phone_number: '+919876543212',
     is_on_duty: true,
+    passcode: '1234',
   },
   {
     staff_id: 'staff-carp-04',
@@ -108,6 +111,7 @@ export const maintenanceStaff: MaintenanceStaff[] = [
     specialization: 'CARPENTRY',
     phone_number: '+919876543213',
     is_on_duty: true,
+    passcode: '1234',
   },
 ];
 
