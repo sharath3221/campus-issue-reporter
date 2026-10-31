@@ -14,7 +14,6 @@ import {
   Filter,
   Check,
   ChevronDown,
-  Volume2,
   Eye,
   Camera,
   ExternalLink,
@@ -173,7 +172,7 @@ export const AdminDashboardPage: React.FC = () => {
         `• Location: ${dispatchModalTicket.location?.building_name}, Floor ${dispatchModalTicket.location?.floor_number}, Room: ${dispatchModalTicket.location?.room_number}\n` +
         `• Category: ${CATEGORY_META[dispatchModalTicket.category].label}\n` +
         `• Duplicates: ${dispatchModalTicket.duplicate_count} students reported\n` +
-        `• Note: ${dispatchModalTicket.voice_transcript || 'Immediate attendance required.'}\n` +
+        `• Note: Immediate attendance required. Gemini AI defect verified.\n` +
         `• Authorized by: ${currentUser?.full_name} (${currentUser?.role})\n\n` +
         `📸 *Submit Fixed Photo Proof when done:*\n${uploadUrl}`
     );
@@ -710,7 +709,7 @@ export const AdminDashboardPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Media Attachments & Voice Note */}
+                    {/* Media Attachments & Gemini AI Tags */}
                     <div style={{ display: 'grid', gridTemplateColumns: ticket.user_photo_url ? '80px 1fr' : '1fr', gap: 12, alignItems: 'center' }}>
                       {ticket.user_photo_url && (
                         <img
@@ -721,29 +720,6 @@ export const AdminDashboardPage: React.FC = () => {
                       )}
 
                       <div>
-                        {/* Voice Note Audio Player & Transcript */}
-                        {ticket.voice_transcript && (
-                          <div
-                            style={{
-                              background: '#FFFBEB',
-                              borderRadius: 8,
-                              padding: '8px 10px',
-                              border: '1px solid #FDE68A',
-                              fontSize: '0.75rem',
-                              color: '#92400E',
-                              marginBottom: 6,
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 800, color: '#B45309' }}>
-                              <Volume2 size={13} />
-                              <span>Voice Note Transcript:</span>
-                            </div>
-                            <div style={{ fontStyle: 'italic', marginTop: 2 }}>
-                              "{ticket.voice_transcript}"
-                            </div>
-                          </div>
-                        )}
-
                         {/* AI Vision Tags */}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                           {ticket.ai_vision_tags.map((tag) => (
