@@ -637,102 +637,20 @@ export const MaintenancePage: React.FC = () => {
               </button>
             </form>
 
-            {/* Quick Staff Demo Picker for Testing */}
-            {maintenanceStaff.length > 0 && (
-              <div
-                style={{
-                  marginTop: 24,
-                  paddingTop: 18,
-                  borderTop: '1px solid #334155',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '0.72rem',
-                    fontWeight: 800,
-                    color: '#94A3B8',
-                    textTransform: 'uppercase',
-                    marginBottom: 8,
-                    letterSpacing: '0.04em',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <Sparkles size={13} color="#F59E0B" />
-                  <span>Tap to Auto-Fill Registered Technician:</span>
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    maxHeight: 220,
-                    overflowY: 'auto',
-                    paddingRight: 4,
-                  }}
-                >
-                  {maintenanceStaff.map((s) => {
-                    const badge = SPECIALIZATION_BADGES[s.specialization] || SPECIALIZATION_BADGES.GENERAL;
-                    return (
-                      <button
-                        key={s.staff_id}
-                        type="button"
-                        onClick={() => {
-                          setLoginPhoneOrId(s.phone_number);
-                          setLoginPasscode(s.passcode || '1234');
-                          setLoginError(null);
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '8px 10px',
-                          borderRadius: 8,
-                          background: '#0F172A',
-                          border: '1px solid #334155',
-                          color: '#E2E8F0',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>{badge.icon}</span>
-                          <span>{s.full_name}</span>
-                          <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>({badge.label})</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
-                            {s.phone_number}
-                          </span>
-                          <span style={{ fontSize: '0.7rem', color: '#38BDF8', fontFamily: 'monospace' }}>
-                            PIN: {s.passcode || '1234'}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* Administrator Notice */}
             <div
               style={{
-                marginTop: 18,
+                marginTop: 24,
                 background: '#0F172A',
                 borderRadius: 10,
-                padding: '10px 12px',
+                padding: '12px 14px',
                 border: '1px solid #334155',
-                fontSize: '0.72rem',
+                fontSize: '0.74rem',
                 color: '#94A3B8',
-                lineHeight: 1.4,
+                lineHeight: 1.5,
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: 8,
+                gap: 10,
               }}
             >
               <Shield size={16} color="#60A5FA" style={{ flexShrink: 0, marginTop: 2 }} />
