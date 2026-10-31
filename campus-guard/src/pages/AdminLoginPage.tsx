@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, UserPlus, LogIn, HelpCircle } from 'lucide-react';
+import { Shield, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, UserPlus, LogIn } from 'lucide-react';
 import { AdminRole, AdminUser } from '../types';
 import {
   signInWithGoogleSupabase,
@@ -19,7 +19,6 @@ export const AdminLoginPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfigTip, setShowConfigTip] = useState(false);
 
   // Check if session already exists or returning from Supabase OAuth
   useEffect(() => {
@@ -111,9 +110,8 @@ export const AdminLoginPage: React.FC = () => {
       const msg = err.message || '';
       setError(
         msg ||
-          'Google Sign-In failed (400). Ensure the redirect URI is registered in Google Cloud Console.'
+          'Google Sign-In failed. Please try email login or verify Google configuration.'
       );
-      setShowConfigTip(true);
       setIsGoogleLoading(false);
     }
   };
@@ -436,63 +434,6 @@ export const AdminLoginPage: React.FC = () => {
             <ArrowRight size={18} />
           </button>
         </form>
-
-        {/* OAuth 400 Quick Helper */}
-        <div style={{ marginTop: 20 }}>
-          <button
-            type="button"
-            onClick={() => setShowConfigTip(!showConfigTip)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#64748B',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              margin: '0 auto',
-            }}
-          >
-            <HelpCircle size={14} />
-            <span>Seeing a 400 redirect_uri error with Google?</span>
-          </button>
-
-          {showConfigTip && (
-            <div
-              style={{
-                marginTop: 10,
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                borderRadius: 10,
-                padding: '10px 12px',
-                fontSize: '0.75rem',
-                color: '#475569',
-                lineHeight: 1.5,
-              }}
-            >
-              <div style={{ fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
-                Fix Google 400 redirect_uri_mismatch:
-              </div>
-              <div>In Google Cloud Console ➔ APIs & Services ➔ Credentials:</div>
-              <div>Add this exact URL to <b>Authorized redirect URIs</b>:</div>
-              <code
-                style={{
-                  display: 'block',
-                  background: '#EDF2F7',
-                  padding: '4px 8px',
-                  borderRadius: 6,
-                  margin: '4px 0',
-                  color: '#0288D1',
-                  wordBreak: 'break-all',
-                }}
-              >
-                https://fxpjftdtfsbsthucvdpm.supabase.co/auth/v1/callback
-              </code>
-            </div>
-          )}
-        </div>
 
         {/* Navigation Links */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
