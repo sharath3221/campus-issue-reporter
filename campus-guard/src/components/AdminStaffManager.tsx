@@ -17,6 +17,9 @@ import {
   Hammer,
   HelpCircle,
   LucideIcon,
+  Copy,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 import { MaintenanceStaff, StaffSpecialization } from '../types';
 
@@ -56,10 +59,52 @@ export const AdminStaffManager: React.FC<AdminStaffManagerProps> = ({
   const [formSuccess, setFormSuccess] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Voucher state for admin to give credentials to the technician
+  const [lastCreatedStaff, setLastCreatedStaff] = useState<{
+    name: string;
+    specialization: StaffSpecialization;
+    phone: string;
+    pin: string;
+  } | null>(null);
+  const [copiedVoucher, setCopiedVoucher] = useState(false);
+  const [copiedCardId, setCopiedCardId] = useState<string | null>(null);
+
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [specFilter, setSpecFilter] = useState<StaffSpecialization | 'ALL'>('ALL');
   const [showAddForm, setShowAddForm] = useState(false);
+
+  const getPortalUrl = () => {
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return `${window.location.origin}/maintenance`;
+    }
+    return 'https://campus-issue-reporter.vercel.app/maintenance';
+  };
+
+  const copyStaffCredentials = (name: string, spec: string, phone: string, pin: string, id?: string) => {
+    const text = `🏢 *Campus Facilities Management - Technician Credentials*\n` +
+      `Hello ${name},\nYour technician account has been authorized by the Facilities Admin.\n\n` +
+      `👤 *Technician:* ${name} (${spec})\n` +
+      `📞 *Login Phone / ID:* ${phone}${id ? ` (or ${id})` : ''}\n` +
+      `🔑 *Duty PIN:* ${pin}\n` +
+      `🌐 *Field Portal:* ${getPortalUrl()}\n\n` +
+      `Open the portal on your phone, enter your phone number and PIN to access campus work orders.`;
+
+    navigator.clipboard.writeText(text);
+  };
+
+  const getWhatsAppCredentialsUrl = (name: string, spec: string, phone: string, pin: string) => {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const text = `🏢 *Campus Facilities Management - Technician Credentials*\n` +
+      `Hello ${name},\nYour technician account has been authorized by Facilities Admin.\n\n` +
+      `👤 *Technician:* ${name} (${spec})\n` +
+      `📞 *Login Phone / ID:* ${phone}\n` +
+      `🔑 *Duty PIN:* ${pin}\n` +
+      `🌐 *Field Portal:* ${getPortalUrl()}\n\n` +
+      `Open the link on your mobile, enter your phone number and PIN to sign in and view campus work orders.`;
+
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  };
 
   // Handle Add Staff Submit
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -73,23 +118,29 @@ export const AdminStaffManager: React.FC<AdminStaffManagerProps> = ({
     setIsSubmitting(true);
 
     try {
-      const success = await onAddStaff({
+      const pinToSave = passcode.trim() || '1234';
+      const staffPayload = {
         full_name: fullName.trim(),
         specialization,
         phone_number: phoneNumber.trim(),
-        passcode: passcode.trim() || '1234',
+        passcode: pinToSave,
         is_on_duty: isOnDuty,
-      });
+      };
+
+      const success = await onAddStaff(staffPayload);
 
       if (success) {
         setFormSuccess(true);
+        setLastCreatedStaff({
+          name: fullName.trim(),
+          specialization,
+          phone: phoneNumber.trim(),
+          pin: pinToSave,
+        });
         setFullName('');
         setPhoneNumber('');
         setPasscode('1234');
-        setTimeout(() => {
-          setFormSuccess(false);
-          setShowAddForm(false);
-        }, 2000);
+        setShowAddForm(false);
       } else {
         setFormError('Failed to register technician in Supabase.');
       }
@@ -378,6 +429,194 @@ export const AdminStaffManager: React.FC<AdminStaffManagerProps> = ({
         )}
       </div>
 
+      {/* Newly Generated Staff Credential Voucher */}
+      {lastCreatedStaff && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #064E3B 0%, #065F46 100%)',
+            border: '2px solid #10B981',
+            borderRadius: 18,
+            padding: '22px 26px',
+            color: 'white',
+            boxShadow: '0 8px 24px rgba(16, 185, 129, 0.25)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <CheckCircle2 size={20} color="#6EE7B7" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 900, margin: 0, color: 'white' }}>
+                  Technician Account Authorized & Credentials Ready!
+                </h3>
+                <p style={{ fontSize: '0.78rem', color: '#A7F3D0', margin: '2px 0 0' }}>
+                  Give these credentials to <b>{lastCreatedStaff.name}</b> so they can sign in on the mobile Field Portal.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setLastCreatedStaff(null)}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                border: 'none',
+                color: 'white',
+                padding: '6px 10px',
+                borderRadius: 8,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              ✕ Close Voucher
+            </button>
+          </div>
+
+          <div
+            style={{
+              background: 'rgba(0, 0, 0, 0.25)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: 12,
+              padding: '16px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#A7F3D0', fontWeight: 700, textTransform: 'uppercase' }}>
+                Technician Name:
+              </span>
+              <div style={{ fontSize: '0.95rem', fontWeight: 800, marginTop: 2 }}>{lastCreatedStaff.name}</div>
+              <div style={{ fontSize: '0.74rem', color: '#D1FAE5' }}>
+                {SPECIALIZATION_CONFIG[lastCreatedStaff.specialization]?.label}
+              </div>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#A7F3D0', fontWeight: 700, textTransform: 'uppercase' }}>
+                Login Phone Number / ID:
+              </span>
+              <div style={{ fontSize: '0.95rem', fontWeight: 900, marginTop: 2, fontFamily: 'monospace' }}>
+                {lastCreatedStaff.phone}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#A7F3D0' }}>Used at Field Portal Login</div>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#A7F3D0', fontWeight: 700, textTransform: 'uppercase' }}>
+                Assigned Duty PIN:
+              </span>
+              <div
+                style={{
+                  fontSize: '1.15rem',
+                  fontWeight: 900,
+                  marginTop: 2,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.15em',
+                  color: '#FDE047',
+                }}
+              >
+                {lastCreatedStaff.pin}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#A7F3D0' }}>4-digit secret passcode</div>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#A7F3D0', fontWeight: 700, textTransform: 'uppercase' }}>
+                Field Portal URL:
+              </span>
+              <div
+                style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  marginTop: 2,
+                  color: '#93C5FD',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {getPortalUrl()}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => {
+                copyStaffCredentials(
+                  lastCreatedStaff.name,
+                  SPECIALIZATION_CONFIG[lastCreatedStaff.specialization]?.label || '',
+                  lastCreatedStaff.phone,
+                  lastCreatedStaff.pin
+                );
+                setCopiedVoucher(true);
+                setTimeout(() => setCopiedVoucher(false), 2500);
+              }}
+              style={{
+                padding: '9px 16px',
+                borderRadius: 10,
+                border: 'none',
+                background: copiedVoucher ? '#10B981' : 'white',
+                color: copiedVoucher ? 'white' : '#065F46',
+                fontWeight: 800,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              {copiedVoucher ? <Check size={16} /> : <Copy size={16} />}
+              <span>{copiedVoucher ? 'Credentials Copied to Clipboard!' : 'Copy Credentials'}</span>
+            </button>
+
+            <a
+              href={getWhatsAppCredentialsUrl(
+                lastCreatedStaff.name,
+                SPECIALIZATION_CONFIG[lastCreatedStaff.specialization]?.label || '',
+                lastCreatedStaff.phone,
+                lastCreatedStaff.pin
+              )}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                padding: '9px 16px',
+                borderRadius: 10,
+                border: 'none',
+                background: '#25D366',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                textDecoration: 'none',
+                boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)',
+              }}
+            >
+              <MessageSquare size={16} />
+              <span>Send Credentials via WhatsApp</span>
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Roster Controls: Search & Specialization Filters */}
       <div
         style={{
@@ -525,6 +764,81 @@ export const AdminStaffManager: React.FC<AdminStaffManagerProps> = ({
                     ID: {staff.staff_id}
                   </div>
                 </div>
+
+                {/* Credentials Quick Actions */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 10,
+                    paddingTop: 8,
+                    borderTop: '1px dashed #E2E8F0',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      copyStaffCredentials(
+                        staff.full_name,
+                        config.label,
+                        staff.phone_number,
+                        staff.passcode || '1234',
+                        staff.staff_id
+                      );
+                      setCopiedCardId(staff.staff_id);
+                      setTimeout(() => setCopiedCardId(null), 2000);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '5px 8px',
+                      borderRadius: 6,
+                      border: '1px solid #CBD5E1',
+                      background: copiedCardId === staff.staff_id ? '#DCFCE7' : '#F8FAFC',
+                      color: copiedCardId === staff.staff_id ? '#16A34A' : '#334155',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    {copiedCardId === staff.staff_id ? <Check size={12} /> : <Copy size={12} />}
+                    <span>{copiedCardId === staff.staff_id ? 'Copied!' : 'Copy Credentials'}</span>
+                  </button>
+
+                  <a
+                    href={getWhatsAppCredentialsUrl(
+                      staff.full_name,
+                      config.label,
+                      staff.phone_number,
+                      staff.passcode || '1234'
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: 6,
+                      border: '1px solid #BBF7D0',
+                      background: '#F0FDF4',
+                      color: '#15803D',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      textDecoration: 'none',
+                    }}
+                    title="Send login credentials directly to technician via WhatsApp"
+                  >
+                    <MessageSquare size={12} />
+                    <span>Send Login</span>
+                  </a>
+                </div>
               </div>
 
               {/* Bottom Actions: Quick WhatsApp & Remove */}
@@ -551,6 +865,7 @@ export const AdminStaffManager: React.FC<AdminStaffManagerProps> = ({
                     gap: 4,
                   }}
                 >
+                  <MessageSquare size={13} />
                   <span>Chat on WhatsApp</span>
                 </a>
 

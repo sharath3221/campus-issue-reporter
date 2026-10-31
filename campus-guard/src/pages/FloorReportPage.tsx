@@ -52,6 +52,8 @@ export const FloorReportPage: React.FC = () => {
 
   // Form State
   const [roomNumber, setRoomNumber] = useState<string>('');
+  const [selectedRoomDropdown, setSelectedRoomDropdown] = useState<string>('');
+  const [isCustomRoom, setIsCustomRoom] = useState<boolean>(false);
   const [selectedCategory, setSelectedCategory] = useState<IncidentCategory>('WATER_SUPPLY');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isAnalyzingCV, setIsAnalyzingCV] = useState(false);
@@ -74,16 +76,107 @@ export const FloorReportPage: React.FC = () => {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Find known rooms registered for this specific building and floor
-  const knownRoomsOnFloor = campusLocations
-    .filter(
-      (l) =>
-        l.building_name.toLowerCase() === bldParam.toLowerCase() &&
-        l.floor_number === floorNumber &&
-        l.room_number
-    )
-    .map((l) => l.room_number.trim().toUpperCase())
-    .filter((value, index, self) => self.indexOf(value) === index);
+  // Live Supabase fetch for campus rooms on this floor
+  const [supabaseRooms, setSupabaseRooms] = useState<CampusLocation[]>([]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    supabase
+      .from('campus_locations')
+      .select('*')
+      .eq('floor_number', floorNumber)
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          setSupabaseRooms(data as CampusLocation[]);
+        }
+      });
+  }, [floorNumber]);
+
+  // Compute all architectural rooms for this building & floor
+  const normalizeText = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanBldParam = normalizeText(bldParam);
+
+  interface ArchitecturalRoomItem {
+    room_number: string;
+    zone_category: CampusLocation['zone_category'];
+    label: string;
+    icon: string;
+  }
+
+  const ZONE_ICONS: Record<string, string> = {
+    CLASSROOM: '🎓',
+    WASHROOM: '🚰',
+    LABORATORY: '🔬',
+    CORRIDOR: '🚪',
+    FACULTY_ROOM: '💼',
+  };
+
+  const architecturalRooms: ArchitecturalRoomItem[] = (() => {
+    const combined = [...campusLocations, ...supabaseRooms];
+    const seen = new Set<string>();
+    const items: ArchitecturalRoomItem[] = [];
+
+    combined.forEach((loc) => {
+      const locBld = normalizeText(loc.building_name);
+      const isBldMatch =
+        locBld === cleanBldParam ||
+        locBld.includes(cleanBldParam) ||
+        cleanBldParam.includes(locBld);
+      const isFloorMatch = Number(loc.floor_number) === Number(floorNumber);
+
+      if (isBldMatch && isFloorMatch && loc.room_number?.trim()) {
+        const rm = loc.room_number.trim().toUpperCase();
+        if (!seen.has(rm)) {
+          seen.add(rm);
+          const zone = loc.zone_category || 'CLASSROOM';
+          items.push({
+            room_number: rm,
+            zone_category: zone,
+            label: `${rm} (${zone.charAt(0) + zone.slice(1).toLowerCase().replace('_', ' ')})`,
+            icon: ZONE_ICONS[zone] || '📍',
+          });
+        }
+      }
+    });
+
+    // If no rooms are pre-registered on this floor, supply standard architectural starter options
+    if (items.length === 0) {
+      const flrPrefix = floorNumber === 0 ? 'G' : `${floorNumber}`;
+      items.push(
+        { room_number: `LH-${flrPrefix}01`, zone_category: 'CLASSROOM', label: `LH-${flrPrefix}01 (Classroom)`, icon: '🎓' },
+        { room_number: `LH-${flrPrefix}02`, zone_category: 'CLASSROOM', label: `LH-${flrPrefix}02 (Classroom)`, icon: '🎓' },
+        { room_number: `LH-${flrPrefix}03`, zone_category: 'CLASSROOM', label: `LH-${flrPrefix}03 (Classroom)`, icon: '🎓' },
+        { room_number: `WASH-${flrPrefix}01`, zone_category: 'WASHROOM', label: `WASH-${flrPrefix}01 (Washroom)`, icon: '🚰' },
+        { room_number: `LAB-${flrPrefix}01`, zone_category: 'LABORATORY', label: `LAB-${flrPrefix}01 (Lab)`, icon: '🔬' },
+        { room_number: `CORR-${flrPrefix}01`, zone_category: 'CORRIDOR', label: `Corridor / Hallway`, icon: '🚪' }
+      );
+    }
+
+    return items;
+  })();
+
+  // Handle Room Dropdown Change
+  const handleRoomDropdownChange = (val: string) => {
+    setSelectedRoomDropdown(val);
+    setShowRoomError(false);
+
+    if (val === '__OTHER__') {
+      setIsCustomRoom(true);
+      setRoomNumber('');
+    } else {
+      setIsCustomRoom(false);
+      setRoomNumber(val);
+
+      // Auto-suggest category if washroom
+      const match = architecturalRooms.find((r) => r.room_number === val);
+      if (match) {
+        if (match.zone_category === 'WASHROOM') {
+          setSelectedCategory('WATER_SUPPLY');
+        }
+        playAudioFeedback(`Selected ${val}`);
+      }
+    }
+  };
 
   // Audio speech feedback
   const playAudioFeedback = (text: string) => {
@@ -687,7 +780,7 @@ export const FloorReportPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 2. Room / Area Selection (Prompted for Reporter) */}
+            {/* 2. Room / Area Dropdown Selection (Fetched from Campus Architecture) */}
             <div
               style={{
                 background: 'white',
@@ -697,82 +790,149 @@ export const FloorReportPage: React.FC = () => {
                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
               }}
             >
-              <label
-                style={{
-                  fontSize: '0.84rem',
-                  fontWeight: 800,
-                  color: '#0F172A',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  marginBottom: 6,
-                }}
-              >
-                <MapPin size={16} color="#0288D1" />
-                <span>1. Enter Room Number / Area Name *</span>
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label
+                  style={{
+                    fontSize: '0.86rem',
+                    fontWeight: 800,
+                    color: '#0F172A',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <MapPin size={16} color="#0288D1" />
+                  <span>1. Select Room / Area on this Floor *</span>
+                </label>
+                <span
+                  style={{
+                    fontSize: '0.66rem',
+                    fontWeight: 800,
+                    background: '#F0F9FF',
+                    color: '#0288D1',
+                    border: '1px solid #BAE6FD',
+                    padding: '2px 7px',
+                    borderRadius: 6,
+                  }}
+                >
+                  Campus Architecture
+                </span>
+              </div>
               <p style={{ fontSize: '0.74rem', color: '#64748B', margin: '0 0 10px' }}>
-                Which room, lab, washroom, or corridor on this floor has the issue?
+                Select the affected room or facility configured in the college architecture:
               </p>
 
-              <input
-                type="text"
-                placeholder="e.g. Room 102, LH-101, Washroom 1, Corridor near Lift"
-                value={roomNumber}
-                onChange={(e) => {
-                  setRoomNumber(e.target.value);
-                  setShowRoomError(false);
-                }}
+              {/* Primary Dropdown Selector */}
+              <select
+                value={selectedRoomDropdown}
+                onChange={(e) => handleRoomDropdownChange(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: 10,
-                  border: showRoomError ? '1.5px solid #EF4444' : '1.5px solid #CBD5E1',
-                  fontSize: '0.95rem',
-                  fontWeight: 600,
+                  padding: '13px 14px',
+                  borderRadius: 12,
+                  border: showRoomError ? '2px solid #EF4444' : '2px solid #0288D1',
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
                   boxSizing: 'border-box',
                   outline: 'none',
-                  background: '#F8FAFC',
+                  background: 'white',
+                  color: selectedRoomDropdown ? '#0F172A' : '#64748B',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(2, 136, 209, 0.08)',
                 }}
-                required
-              />
+              >
+                <option value="">-- Choose Room / Area from Architecture --</option>
+                {architecturalRooms.map((rm) => (
+                  <option key={rm.room_number} value={rm.room_number}>
+                    {rm.icon} {rm.label}
+                  </option>
+                ))}
+                <option value="__OTHER__">+ Specify Another Room or Area...</option>
+              </select>
 
-              {showRoomError && (
-                <div style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 700, marginTop: 6 }}>
-                  ⚠️ Please specify the room number or area.
+              {/* Custom Room Input if user selects '+ Specify Another' */}
+              {isCustomRoom && (
+                <div style={{ marginTop: 10 }}>
+                  <input
+                    type="text"
+                    placeholder="Type room number or specific spot (e.g. Near Lift, Corridor 204)"
+                    value={roomNumber}
+                    onChange={(e) => {
+                      setRoomNumber(e.target.value);
+                      setShowRoomError(false);
+                    }}
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      padding: '11px 13px',
+                      borderRadius: 10,
+                      border: '1.5px solid #0288D1',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      boxSizing: 'border-box',
+                      background: '#F8FAFC',
+                    }}
+                  />
                 </div>
               )}
 
-              {/* Quick-Select Chips from Registered Rooms on this Floor */}
-              {knownRoomsOnFloor.length > 0 && (
-                <div style={{ marginTop: 10 }}>
-                  <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
-                    Quick Select Rooms on {floorLabel}:
-                  </span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {knownRoomsOnFloor.map((rm) => (
-                      <button
-                        key={rm}
-                        type="button"
-                        onClick={() => {
-                          setRoomNumber(rm);
-                          setShowRoomError(false);
-                        }}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: 8,
-                          border: roomNumber.toUpperCase() === rm ? '1.5px solid #0288D1' : '1px solid #E2E8F0',
-                          background: roomNumber.toUpperCase() === rm ? '#E0F2FE' : '#F8FAFC',
-                          color: roomNumber.toUpperCase() === rm ? '#0288D1' : '#334155',
-                          fontSize: '0.74rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {rm}
-                      </button>
-                    ))}
-                  </div>
+              {/* Quick 1-Tap Room Selection Chips */}
+              <div style={{ marginTop: 12 }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+                  Quick 1-Tap Room Selection on {floorLabel}:
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {architecturalRooms.map((rm) => (
+                    <button
+                      key={rm.room_number}
+                      type="button"
+                      onClick={() => handleRoomDropdownChange(rm.room_number)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: roomNumber.toUpperCase() === rm.room_number ? '2px solid #0288D1' : '1px solid #E2E8F0',
+                        background: roomNumber.toUpperCase() === rm.room_number ? '#E0F2FE' : '#F8FAFC',
+                        color: roomNumber.toUpperCase() === rm.room_number ? '#0288D1' : '#334155',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>{rm.icon}</span>
+                      <span>{rm.room_number}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selected Room Feedback Indicator */}
+              {roomNumber && !isCustomRoom && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    background: '#F0FDF4',
+                    border: '1px solid #BBF7D0',
+                    borderRadius: 8,
+                    padding: '6px 10px',
+                    fontSize: '0.74rem',
+                    color: '#15803D',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Check size={14} />
+                  <span>Selected Facility: <b>{roomNumber}</b> ({floorLabel})</span>
+                </div>
+              )}
+
+              {showRoomError && (
+                <div style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 700, marginTop: 8 }}>
+                  ⚠️ Please select a room or area from the dropdown list.
                 </div>
               )}
             </div>

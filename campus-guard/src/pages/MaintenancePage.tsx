@@ -653,8 +653,17 @@ export const MaintenancePage: React.FC = () => {
                   <Sparkles size={13} color="#F59E0B" />
                   <span>Tap to Auto-Fill Registered Technician:</span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {maintenanceStaff.slice(0, 4).map((s) => {
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    maxHeight: 220,
+                    overflowY: 'auto',
+                    paddingRight: 4,
+                  }}
+                >
+                  {maintenanceStaff.map((s) => {
                     const badge = SPECIALIZATION_BADGES[s.specialization] || SPECIALIZATION_BADGES.GENERAL;
                     return (
                       <button
@@ -669,7 +678,7 @@ export const MaintenancePage: React.FC = () => {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          padding: '7px 10px',
+                          padding: '8px 10px',
                           borderRadius: 8,
                           background: '#0F172A',
                           border: '1px solid #334155',
@@ -678,6 +687,7 @@ export const MaintenancePage: React.FC = () => {
                           fontWeight: 700,
                           cursor: 'pointer',
                           textAlign: 'left',
+                          transition: 'all 0.15s ease',
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -685,9 +695,14 @@ export const MaintenancePage: React.FC = () => {
                           <span>{s.full_name}</span>
                           <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>({badge.label})</span>
                         </div>
-                        <span style={{ fontSize: '0.7rem', color: '#38BDF8', fontFamily: 'monospace' }}>
-                          PIN: {s.passcode || '1234'}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                            {s.phone_number}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: '#38BDF8', fontFamily: 'monospace' }}>
+                            PIN: {s.passcode || '1234'}
+                          </span>
+                        </div>
                       </button>
                     );
                   })}
@@ -713,7 +728,7 @@ export const MaintenancePage: React.FC = () => {
             >
               <Shield size={16} color="#60A5FA" style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                <strong>Admin Provisioned:</strong> New staff members can be added and managed by administrators in the{' '}
+                <strong>Admin Provisioned Credentials:</strong> Sign in using the exact phone number and 4-digit PIN provided to you by your Administrator. To add or update technicians, visit the{' '}
                 <span
                   onClick={() => navigate('/admin/dashboard')}
                   style={{ color: '#38BDF8', cursor: 'pointer', textDecoration: 'underline' }}

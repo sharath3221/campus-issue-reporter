@@ -24,6 +24,7 @@ import {
   QrCode,
   Compass,
   Building,
+  UserPlus,
 } from 'lucide-react';
 import {
   IncidentTicket,
@@ -295,6 +296,27 @@ export const AdminDashboardPage: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveNavTab('STAFF')}
+            style={{
+              background: activeNavTab === 'STAFF' ? '#0288D1' : '#059669',
+              border: 'none',
+              color: 'white',
+              borderRadius: 8,
+              padding: '6px 12px',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              boxShadow: '0 2px 6px rgba(5, 150, 105, 0.3)',
+            }}
+          >
+            <UserPlus size={14} />
+            <span>+ Add Staff</span>
+          </button>
+
+          <button
             onClick={() => navigate('/maintenance')}
             style={{
               background: '#F59E0B20',
@@ -341,9 +363,12 @@ export const AdminDashboardPage: React.FC = () => {
         style={{
           background: '#1E293B',
           borderBottom: '1px solid #334155',
-          padding: '0 24px',
+          padding: '0 20px',
           display: 'flex',
-          gap: 12,
+          gap: 8,
+          overflowX: 'auto',
+          whiteSpace: 'nowrap',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         <button
@@ -360,6 +385,7 @@ export const AdminDashboardPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
+            flexShrink: 0,
             transition: 'all 0.15s ease',
           }}
         >
@@ -381,6 +407,7 @@ export const AdminDashboardPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
+            flexShrink: 0,
             transition: 'all 0.15s ease',
           }}
         >
@@ -414,6 +441,7 @@ export const AdminDashboardPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
+            flexShrink: 0,
             transition: 'all 0.15s ease',
           }}
         >
@@ -447,6 +475,7 @@ export const AdminDashboardPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
+            flexShrink: 0,
             transition: 'all 0.15s ease',
           }}
         >
