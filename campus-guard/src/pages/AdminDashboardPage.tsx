@@ -22,6 +22,8 @@ import {
   Flame,
   Wrench,
   QrCode,
+  Compass,
+  Building,
 } from 'lucide-react';
 import {
   IncidentTicket,
@@ -35,6 +37,7 @@ import {
 import { useIncidents } from '../hooks/useIncidents';
 import { QRSpotGenerator } from '../components/QRSpotGenerator';
 import { AdminStaffManager } from '../components/AdminStaffManager';
+import { AdminArchitectureManager } from '../components/AdminArchitectureManager';
 import { getActiveAdminSession, signOutAdmin, ADMIN_SESSION_KEY } from '../lib/supabaseAuth';
 
 export const AdminDashboardPage: React.FC = () => {
@@ -44,6 +47,10 @@ export const AdminDashboardPage: React.FC = () => {
     maintenanceStaff,
     campusLocations,
     addCampusLocation,
+    addCampusLocations,
+    deleteCampusLocation,
+    deleteCampusLocationsByBuilding,
+    deleteCampusLocationsByFloor,
     addMaintenanceStaff,
     toggleStaffDuty,
     deleteMaintenanceStaff,
@@ -53,7 +60,7 @@ export const AdminDashboardPage: React.FC = () => {
   } = useIncidents();
 
   // Navigation tab
-  const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'QR_STUDIO' | 'STAFF'>('OPERATIONS');
+  const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'ARCHITECTURE' | 'QR_STUDIO' | 'STAFF'>('OPERATIONS');
 
   // Admin Session Check (Strict Constraint 3 - Strictly Authenticated Sessions Only)
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
@@ -92,6 +99,38 @@ export const AdminDashboardPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'ALL'>('ALL');
   const [selectedFloor, setSelectedFloor] = useState<number>(1);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+
+  // Dynamically extract buildings from campusLocations
+  const campusBuildingNames = Array.from(
+    new Set(campusLocations.map((l) => l.building_name))
+  );
+
+  const [selectedMapBuilding, setSelectedMapBuilding] = useState<string>(() => {
+    return campusBuildingNames[0] || 'Engineering Block A';
+  });
+
+  useEffect(() => {
+    if (campusBuildingNames.length > 0 && !campusBuildingNames.includes(selectedMapBuilding)) {
+      setSelectedMapBuilding(campusBuildingNames[0]);
+    }
+  }, [campusBuildingNames, selectedMapBuilding]);
+
+  // Floors for the selected map building
+  const mapBuildingFloors = Array.from(
+    new Set(
+      campusLocations
+        .filter((l) => l.building_name === selectedMapBuilding)
+        .map((l) => l.floor_number)
+    )
+  ).sort((a, b) => a - b);
+
+  const availableMapFloors = mapBuildingFloors.length > 0 ? mapBuildingFloors : [1, 2, 3];
+
+  useEffect(() => {
+    if (!availableMapFloors.includes(selectedFloor) && availableMapFloors.length > 0) {
+      setSelectedFloor(availableMapFloors[0]);
+    }
+  }, [availableMapFloors, selectedFloor]);
 
   // Dispatch Modal State
   const [dispatchModalTicket, setDispatchModalTicket] = useState<IncidentTicket | null>(null);
@@ -327,6 +366,39 @@ export const AdminDashboardPage: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveNavTab('ARCHITECTURE')}
+          style={{
+            padding: '12px 18px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeNavTab === 'ARCHITECTURE' ? '3px solid #38BDF8' : '3px solid transparent',
+            color: activeNavTab === 'ARCHITECTURE' ? '#38BDF8' : '#94A3B8',
+            fontWeight: 800,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Compass size={16} />
+          <span>Campus Architecture</span>
+          <span
+            style={{
+              background: '#0288D1',
+              color: 'white',
+              fontSize: '0.65rem',
+              padding: '2px 7px',
+              borderRadius: 10,
+              fontWeight: 800,
+            }}
+          >
+            {campusBuildingNames.length} Bldgs • {campusLocations.length} Rms
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveNavTab('QR_STUDIO')}
           style={{
             padding: '12px 18px',
@@ -395,7 +467,17 @@ export const AdminDashboardPage: React.FC = () => {
 
       {/* Main Content Area */}
       <main style={{ maxWidth: 1240, margin: '0 auto', padding: '24px 20px' }}>
-        {activeNavTab === 'QR_STUDIO' ? (
+        {activeNavTab === 'ARCHITECTURE' ? (
+          <AdminArchitectureManager
+            campusLocations={campusLocations}
+            tickets={tickets}
+            onAddLocation={addCampusLocation}
+            onAddLocations={addCampusLocations}
+            onDeleteLocation={deleteCampusLocation}
+            onDeleteBuildingLocations={deleteCampusLocationsByBuilding}
+            onDeleteFloorLocations={deleteCampusLocationsByFloor}
+          />
+        ) : activeNavTab === 'QR_STUDIO' ? (
           <QRSpotGenerator
             campusLocations={campusLocations}
             onAddLocation={addCampusLocation}
@@ -459,27 +541,52 @@ export const AdminDashboardPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Multi-Floor Selector (§3) */}
-              <div style={{ display: 'flex', gap: 6, background: '#F1F5F9', padding: 4, borderRadius: 10 }}>
-                {[1, 2, 3].map((floor) => (
-                  <button
-                    key={floor}
-                    type="button"
-                    onClick={() => setSelectedFloor(floor)}
+              {/* Dynamic Building & Multi-Floor Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {campusBuildingNames.length > 1 && (
+                  <select
+                    value={selectedMapBuilding}
+                    onChange={(e) => setSelectedMapBuilding(e.target.value)}
                     style={{
-                      padding: '5px 12px',
+                      padding: '5px 10px',
                       borderRadius: 8,
-                      border: 'none',
-                      background: selectedFloor === floor ? '#0288D1' : 'transparent',
-                      color: selectedFloor === floor ? 'white' : '#475569',
-                      fontWeight: 800,
+                      border: '1.5px solid #CBD5E1',
                       fontSize: '0.78rem',
-                      cursor: 'pointer',
+                      fontWeight: 700,
+                      background: 'white',
+                      color: '#0F172A',
                     }}
                   >
-                    Floor {floor}
-                  </button>
-                ))}
+                    {campusBuildingNames.map((bName) => (
+                      <option key={bName} value={bName}>
+                        {bName}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <div style={{ display: 'flex', gap: 6, background: '#F1F5F9', padding: 4, borderRadius: 10, overflowX: 'auto' }}>
+                  {availableMapFloors.map((floor) => (
+                    <button
+                      key={floor}
+                      type="button"
+                      onClick={() => setSelectedFloor(floor)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: 8,
+                        border: 'none',
+                        background: selectedFloor === floor ? '#0288D1' : 'transparent',
+                        color: selectedFloor === floor ? 'white' : '#475569',
+                        fontWeight: 800,
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {floor === -1 ? 'Basement' : floor === 0 ? 'Ground' : `Floor ${floor}`}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -509,7 +616,7 @@ export const AdminDashboardPage: React.FC = () => {
                   Washroom Cluster
                 </text>
                 <text x="170" y="168" textAnchor="middle" fill="#0284C7" fontSize="9" fontWeight="600">
-                  Floor {selectedFloor} Zone
+                  {selectedMapBuilding} • Floor {selectedFloor}
                 </text>
 
                 {/* Zone 2: Lecture Halls */}
@@ -518,7 +625,7 @@ export const AdminDashboardPage: React.FC = () => {
                   Lecture Halls & Classrooms
                 </text>
                 <text x="400" y="168" textAnchor="middle" fill="#B45309" fontSize="9" fontWeight="600">
-                  LH-{selectedFloor}01 to LH-{selectedFloor}06
+                  {selectedMapBuilding} Level {selectedFloor}
                 </text>
 
                 {/* Zone 3: Corridor / Water Coolers */}
@@ -533,7 +640,7 @@ export const AdminDashboardPage: React.FC = () => {
                 {/* Corridor Path */}
                 <path d="M 80 250 L 680 250" stroke="#CBD5E1" strokeWidth="18" strokeLinecap="round" opacity="0.6" />
                 <text x="380" y="254" textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="700">
-                  MAIN CORRIDOR (FLOOR {selectedFloor})
+                  MAIN CORRIDOR ({selectedMapBuilding.toUpperCase()} - FLOOR {selectedFloor})
                 </text>
 
                 {/* Spatial Pins (§3) */}

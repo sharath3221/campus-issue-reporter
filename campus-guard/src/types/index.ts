@@ -25,6 +25,14 @@ export interface CampusLocation {
   y_coord?: number;
 }
 
+export interface CampusBuildingConfig {
+  building_id: string;
+  building_name: string;
+  building_code: string;
+  floors_count: number;
+  description?: string;
+}
+
 export interface MaintenanceStaff {
   staff_id: string;
   full_name: string;

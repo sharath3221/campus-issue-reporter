@@ -401,7 +401,133 @@ export function useIncidents() {
 
       return true;
     },
-    [staffList, tickets]
+    []
+  );
+
+  // Add / Register multiple Campus Locations in batch
+  const addCampusLocations = useCallback(
+    async (newLocs: CampusLocation[]): Promise<boolean> => {
+      if (newLocs.length === 0) return true;
+
+      // 1. Update local reactive state
+      setLocations((prev) => {
+        const newIds = new Set(newLocs.map((l) => l.location_id));
+        const filtered = prev.filter((l) => !newIds.has(l.location_id));
+        const updated = [...newLocs, ...filtered];
+        try {
+          localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+        return updated;
+      });
+
+      // 2. Persist to Supabase database
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const rows = newLocs.map((newLoc) => ({
+            location_id: newLoc.location_id,
+            building_name: newLoc.building_name,
+            floor_number: newLoc.floor_number,
+            room_number: newLoc.room_number,
+            zone_category: newLoc.zone_category,
+            gps_latitude: newLoc.gps_latitude || 16.8456,
+            gps_longitude: newLoc.gps_longitude || 74.6012,
+            fixture_id: newLoc.fixture_id || '',
+            x_coord: newLoc.x_coord || 200,
+            y_coord: newLoc.y_coord || 150,
+          }));
+
+          const { error } = await supabase
+            .from('campus_locations')
+            .upsert(rows, { onConflict: 'location_id' });
+
+          if (error) {
+            console.warn('Supabase batch locations upsert notice:', error);
+          }
+        } catch (err) {
+          console.warn('Supabase batch location error:', err);
+        }
+      }
+
+      return true;
+    },
+    []
+  );
+
+  // Delete / Remove a single Campus Location
+  const deleteCampusLocation = useCallback(
+    async (locationId: string): Promise<boolean> => {
+      setLocations((prev) => {
+        const updated = prev.filter((l) => l.location_id !== locationId);
+        try {
+          localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('campus_locations').delete().eq('location_id', locationId);
+        } catch (e) {
+          console.warn('Supabase location delete error:', e);
+        }
+      }
+      return true;
+    },
+    []
+  );
+
+  // Delete all locations in a building
+  const deleteCampusLocationsByBuilding = useCallback(
+    async (buildingName: string): Promise<boolean> => {
+      setLocations((prev) => {
+        const updated = prev.filter((l) => l.building_name !== buildingName);
+        try {
+          localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('campus_locations').delete().eq('building_name', buildingName);
+        } catch (e) {
+          console.warn('Supabase building delete error:', e);
+        }
+      }
+      return true;
+    },
+    []
+  );
+
+  // Delete all locations on a specific floor of a building
+  const deleteCampusLocationsByFloor = useCallback(
+    async (buildingName: string, floorNumber: number): Promise<boolean> => {
+      setLocations((prev) => {
+        const updated = prev.filter(
+          (l) => !(l.building_name === buildingName && l.floor_number === floorNumber)
+        );
+        try {
+          localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase
+            .from('campus_locations')
+            .delete()
+            .eq('building_name', buildingName)
+            .eq('floor_number', floorNumber);
+        } catch (e) {
+          console.warn('Supabase floor delete error:', e);
+        }
+      }
+      return true;
+    },
+    []
   );
 
   // Submit report with Smart Duplicate Clustering & Supabase Ingestion
@@ -826,6 +952,10 @@ export function useIncidents() {
     campusLocations: locations,
     maintenanceStaff: staffList,
     addCampusLocation,
+    addCampusLocations,
+    deleteCampusLocation,
+    deleteCampusLocationsByBuilding,
+    deleteCampusLocationsByFloor,
     addMaintenanceStaff,
     toggleStaffDuty,
     deleteMaintenanceStaff,

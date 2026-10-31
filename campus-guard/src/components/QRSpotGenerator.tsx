@@ -367,6 +367,17 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
     return true;
   });
 
+  // Dynamically extract all known buildings from registered locations
+  const knownBuildings = Array.from(
+    new Set([
+      'Engineering Block A',
+      'Science Block B',
+      'Academic Complex C',
+      'Central Library',
+      ...campusLocations.map((l) => l.building_name),
+    ])
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* SECTION 1: QR CODE GENERATOR STUDIO */}
@@ -434,12 +445,11 @@ export const QRSpotGenerator: React.FC<QRSpotGeneratorProps> = ({
                   background: 'white',
                 }}
               >
-                <option value="Engineering Block A">Engineering Block A</option>
-                <option value="Science Block B">Science Block B</option>
-                <option value="Academic Complex C">Academic Complex C</option>
-                <option value="Central Library">Central Library</option>
-                <option value="Hostel Block 1">Hostel Block 1</option>
-                <option value="Administrative Center">Administrative Center</option>
+                {knownBuildings.map((bName) => (
+                  <option key={bName} value={bName}>
+                    {bName}
+                  </option>
+                ))}
                 <option value="CUSTOM">+ Add Custom Building Name...</option>
               </select>
 

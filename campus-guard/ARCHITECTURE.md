@@ -110,12 +110,19 @@ flowchart TD
 
 ### 3.5 Executive Admin Portal (`/admin/*`)
 - **Authentication:** Supabase Auth for Google Sign-In and institutional passkeys.
+- **College Campus Architecture Builder:** Dedicated administrative builder tab ("Campus Architecture") allowing admins to:
+  - Add & manage Campus Buildings / Blocks (custom names, short code prefixes, total floors).
+  - Provision Starter Templates (Academic Wing, Practical Labs, Hostel & Dorms, or Custom Empty).
+  - Add & configure custom Floors (Basement -1, Ground Floor 0, Floors 1..N).
+  - Add individual rooms or run the 1-click **Batch Room Generator Wizard** (sequential classrooms, labs, male/female washrooms, water cooler corridors).
+  - 1-click batch print floor placard sheets and single PNG sticker downloads.
+  - Automatically synchronizes with Supabase `campus_locations` table and dynamically updates the Live Spatial Floor Map and Spot QR Studio.
 - **Maintenance Staff Roster Management:** Complete administrative panel under the "Maintenance Staff Roster" tab to:
   - Register new technicians (Full Name, Trade Specialization, Phone Number, Login Passcode/PIN, Duty Status).
   - 1-click On-Duty / Off-Duty status toggles.
   - Delete / remove staff members.
   - Persisted to Supabase `maintenance_staff` table and synced in real time across the portal.
-- **Live 2D Spatial Floor Map:** Interactive SVG floor map with multi-floor selector (Floors 1, 2, 3) and status pins (🔴 Urgent, 🟡 Dispatched, 🟢 Resolved).
+- **Live 2D Spatial Floor Map:** Dynamic SVG floor map with building selector, multi-floor selector (Ground, Floors 1..N), and spatial pins colored by AI urgency and progression (🔴 Urgent, 🟡 Dispatched, 🟢 Resolved).
 - **One-Click WhatsApp Dispatch:** Generates pre-formatted work order messages with deep links to `/maintenance` and dispatches via Supabase Edge Function `dispatch-alert`.
 - **Spot QR Sticker Generator Studio:**
   - Configurable parameters: Building Name, Floor, Room, Zone Category, Fixture ID.
