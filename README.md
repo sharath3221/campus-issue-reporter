@@ -39,6 +39,8 @@ CampusPulse is an enterprise-grade, mobile-first facility incident reporting sys
 
 ## 🔬 AI Defect Verification & Classification System
 
+> 📘 **Detailed Architectural Reference:** For the complete mathematical formulas, tag taxonomy, and scoring scenarios, see [**`REPORT_CLASSIFICATION.md`**](REPORT_CLASSIFICATION.md).
+
 The verification pipeline in [`src/lib/defectVerification.ts`](campus-guard/src/lib/defectVerification.ts) runs four sequential verification layers before any incident is accepted:
 
 1. **Layer 1: Biometric Hardware Face Guard (`detectHumanFaceClientSide`)**  

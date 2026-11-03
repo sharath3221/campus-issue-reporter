@@ -16,7 +16,7 @@
 
 ### Core Objectives:
 1. **Zero Registration Barrier:** Decouple incident submission completely from user identity. No student PRNs, institutional emails, logins, passwords, or OTPs required for submitting reports.
-2. **Autonomous AI Computer Vision & Defect Verification:** Integrated multi-tier verification engine ([`src/lib/defectVerification.ts`](campus-guard/src/lib/defectVerification.ts)) leveraging browser biometric `FaceDetector` APIs, Google Gemini 2.5 Flash, and Supabase Edge Functions. Strictly rejects selfies, blurry photos, and plain undamaged walls.
+2. **Autonomous AI Computer Vision & Defect Verification:** Integrated multi-tier verification engine ([`src/lib/defectVerification.ts`](campus-guard/src/lib/defectVerification.ts)) leveraging browser biometric `FaceDetector` APIs, Google Gemini 2.5 Flash, and Supabase Edge Functions. Strictly rejects selfies, blurry photos, and plain undamaged walls. *(Detailed formulas and taxonomy documented in [REPORT_CLASSIFICATION.md](REPORT_CLASSIFICATION.md))*
 3. **Direct Executive Pipeline:** Eliminate administrative bottlenecks by routing reports directly from public intake into an executive management portal and maintenance queue for one-click work order dispatch.
 4. **Physical Spot QR Generator Studio:** Built-in generator allowing administrators to create and print physical QR placards for any building, floor, room, or fixture.
 5. **Dynamic Spatial Campus Blueprint:** Multi-floor architecture supporting arbitrary building floors (Floor 1, Floor 2, Floor 3, etc.) with customizable rooms and floor station QR intake routes.
