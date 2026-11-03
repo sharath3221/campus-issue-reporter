@@ -87,16 +87,72 @@ async function extractVisualFeatures(imageDataUrl: string): Promise<{
 }
 
 /**
+ * Fast client-side biometric face detection guard.
+ * If modern browser FaceDetector API is available (Chrome Android / Desktop),
+ * runs native hardware detection to immediately reject any selfie/portrait within 10ms.
+ */
+async function detectHumanFaceClientSide(imageDataUrl: string): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    if ('FaceDetector' in window) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const isLoaded = await new Promise<boolean>((resolve) => {
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = imageDataUrl;
+      });
+      if (!isLoaded) return false;
+
+      const detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const faces = await detector.detect(img);
+      if (faces && faces.length > 0) {
+        console.log('🚨 Client FaceDetector triggered: selfie / human face found!');
+        return true;
+      }
+    }
+  } catch (e) {
+    // FaceDetector not supported or permission denied, fallback to Gemini
+  }
+  return false;
+}
+
+/**
  * Strict validator to ensure an image actually shows a genuine, detectable facility defect.
  * Blocks any result with tags like 'no_detectable_defects', 'image_unclear', 'blurry',
- * or summaries stating no damage or unidentifiable defect.
+ * selfies, human faces, or summaries stating no damage or unidentifiable defect.
  */
 export function validateGenuineness(
   rawIsGenuine: boolean | undefined,
   tags: string[],
   summary: string,
-  rejectionReason?: string
+  rejectionReason?: string,
+  category?: IncidentCategory
 ): { isGenuine: boolean; rejectionReason?: string } {
+  const PERSON_PATTERNS = [
+    'selfie',
+    'face',
+    'person',
+    'human',
+    'portrait',
+    'headshot',
+    'student',
+    'people',
+    'man',
+    'woman',
+    'boy',
+    'girl',
+    'posing',
+    'individual',
+    'personal_photo',
+    'personal_portrait',
+    'smile',
+    'smiling',
+    'looking_at_camera',
+    'front_camera',
+    'skin',
+  ];
+
   const INVALID_PATTERNS = [
     'no_detectable_defects',
     'no_detectable_defect',
@@ -124,14 +180,67 @@ export function validateGenuineness(
     'blank_or_obscured_image',
     'cannot_detect',
     'unable_to_detect',
+    'plain_wall',
+    'normal_wall',
+    'wall_background',
+    'indoor_wall',
+    'clean_wall',
   ];
 
-  const hasInvalidTag = tags.some((t) => {
-    const cleanT = t.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    return INVALID_PATTERNS.some((pat) => cleanT.includes(pat));
-  });
+  const cleanTags = tags.map((t) => t.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+
+  // 1. Check for selfie / human presence in tags
+  const hasPersonTag = cleanTags.some((t) =>
+    PERSON_PATTERNS.some((p) => t === p || t.includes(`_${p}`) || t.includes(`${p}_`) || t === `a_${p}`)
+  );
 
   const sumLower = (summary || '').toLowerCase();
+  const rejLower = (rejectionReason || '').toLowerCase();
+
+  const hasPersonInText =
+    sumLower.includes('selfie') ||
+    sumLower.includes('portrait') ||
+    sumLower.includes('person') ||
+    sumLower.includes('human face') ||
+    sumLower.includes('student') ||
+    sumLower.includes('individual') ||
+    sumLower.includes('face') ||
+    rejLower.includes('selfie') ||
+    rejLower.includes('person') ||
+    rejLower.includes('portrait') ||
+    rejLower.includes('face');
+
+  if (hasPersonTag || hasPersonInText) {
+    return {
+      isGenuine: false,
+      rejectionReason:
+        'Photo contains a selfie, human face, or person. Campus facility reports must photograph only the physical defect, without people.',
+    };
+  }
+
+  // 2. Check for invalid or no-defect tags
+  const hasInvalidTag = cleanTags.some((t) =>
+    INVALID_PATTERNS.some((pat) => t.includes(pat))
+  );
+
+  // 3. Check for generic wall detection without active structural damage
+  const isGenericWall =
+    cleanTags.length > 0 &&
+    cleanTags.every((t) => t.includes('wall') || t.includes('surface') || t.includes('paint') || t.includes('room') || t.includes('indoor') || t.includes('partition')) &&
+    !cleanTags.some((t) => t.includes('leak') || t.includes('burst') || t.includes('mold') || t.includes('heavy_crack') || t.includes('hole'));
+
+  // 4. Check for category mismatch when tags describe a wall or background instead of the reported defect category
+  const isWallCategoryMismatch =
+    Boolean(category) &&
+    category !== 'WASHROOM_CLEANLINESS' &&
+    cleanTags.some((t) => t.includes('wall') || t.includes('surface') || t.includes('background')) &&
+    !cleanTags.some((t) => {
+      if (category === 'FURNITURE_MAINTENANCE') return t.includes('desk') || t.includes('chair') || t.includes('table') || t.includes('bench') || t.includes('furniture') || t.includes('door') || t.includes('wood') || t.includes('cabinet');
+      if (category === 'WATER_SUPPLY') return t.includes('water') || t.includes('pipe') || t.includes('plumb') || t.includes('tap') || t.includes('leak') || t.includes('flush') || t.includes('drain');
+      if (category === 'LIGHTS_FAN_PROJECTOR') return t.includes('light') || t.includes('fan') || t.includes('electric') || t.includes('wire') || t.includes('switch') || t.includes('projector') || t.includes('power');
+      return false;
+    });
+
   const hasNoDefectSummary =
     sumLower.includes('no detectable defect') ||
     sumLower.includes('no specific physical defect') ||
@@ -146,20 +255,40 @@ export function validateGenuineness(
     sumLower.includes('not enough detail') ||
     sumLower.includes('unclear and blurry') ||
     sumLower.includes('normal condition') ||
-    sumLower.includes('in good condition');
+    sumLower.includes('in good condition') ||
+    sumLower.includes('wall in the background') ||
+    sumLower.includes('plain wall') ||
+    sumLower.includes('undamaged wall');
 
-  if (rawIsGenuine === false || hasInvalidTag || hasNoDefectSummary) {
+  if (rawIsGenuine === false || hasInvalidTag || hasNoDefectSummary || isGenericWall || isWallCategoryMismatch) {
     let reason = rejectionReason;
     if (!reason || reason.trim().length === 0) {
       if (hasNoDefectSummary && summary.trim().length > 0) {
         reason = summary.trim();
       } else if (hasInvalidTag) {
         reason = 'No physical defects or damage could be detected in this photo. Please photograph the physical defect clearly.';
+      } else if (isWallCategoryMismatch && category) {
+        reason = `Photo depicts a wall or background instead of the reported issue. Please photograph the physical ${category.replace(/_/g, ' ').toLowerCase()} defect directly.`;
+      } else if (isGenericWall) {
+        reason = 'Photo only depicts a normal painted wall or room surface. Facility reports require active, visible physical damage or hazards.';
       } else {
         reason = 'Photo rejected: Not identified as a genuine campus facility defect.';
       }
     }
     return { isGenuine: false, rejectionReason: reason };
+  }
+
+  // If rawIsGenuine is not explicitly true (e.g. undefined from an old edge function), verify we have meaningful defect tags
+  if (rawIsGenuine !== true) {
+    const hasMeaningfulDefect = cleanTags.some((t) =>
+      ['broken', 'leak', 'rupture', 'spill', 'fracture', 'damaged', 'crack', 'stain', 'overflow', 'clog', 'spark', 'hazard'].some((d) => t.includes(d))
+    );
+    if (!hasMeaningfulDefect) {
+      return {
+        isGenuine: false,
+        rejectionReason: 'Unable to verify a specific facility defect in this photo. Please photograph the defect clearly.',
+      };
+    }
   }
 
   return { isGenuine: true };
@@ -175,39 +304,24 @@ export async function analyzeImageDefects(
   imageDataUrl: string,
   category: IncidentCategory
 ): Promise<VisionAnalysisResult> {
-  // 1. First priority: Supabase Edge Function (Gemini API key is 100% hidden on server)
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.functions.invoke('analyze-defect', {
-        body: { imageDataUrl, category },
-      });
-
-      if (!error && data && (data.is_genuine !== undefined || Array.isArray(data.tags))) {
-        console.log('⚡ Edge Function Vision result:', data);
-        const rawTags = Array.isArray(data.tags)
-          ? data.tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
-          : ['defect_detected'];
-        const rawSummary = data.summary || '';
-        const validation = validateGenuineness(data.is_genuine, rawTags, rawSummary, data.rejection_reason);
-
-        return {
-          isGenuine: validation.isGenuine,
-          rejectionReason: validation.rejectionReason,
-          tags: rawTags,
-          severityScore: validation.isGenuine ? Number(data.severityScore) || 8.0 : 1.0,
-          summary: rawSummary || (validation.isGenuine ? 'Defect verified by Gemini via Edge Function.' : 'Report rejected by AI.'),
-          isRealAI: true,
-          modelUsed: data.modelUsed || 'Google Gemini 2.5 Flash (Supabase Edge Function)',
-        };
-      }
-    } catch (edgeErr) {
-      console.warn('Notice: Supabase Edge Function bypassed, falling back to direct client pipeline:', edgeErr);
-    }
+  // 1. Instant Biometric Face Guard (Client-side native check)
+  const isFaceDetected = await detectHumanFaceClientSide(imageDataUrl);
+  if (isFaceDetected) {
+    return {
+      isGenuine: false,
+      rejectionReason:
+        'Photo contains a selfie or human face. Campus facility defect reports must show only the physical facility defect, without people.',
+      tags: ['selfie_detected', 'human_face_present', 'unrelated_content'],
+      severityScore: 1.0,
+      summary: 'Report rejected: Selfie or human face detected in photo.',
+      isRealAI: true,
+      modelUsed: 'Biometric Face Guard',
+    };
   }
 
   const envKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  // 2. Direct client fallback (when running with VITE_GEMINI_API_KEY)
+  // 2. Direct Gemini 2.5 Flash Client Call (Primary Priority for Hardened Verification)
   if (envKey && typeof envKey === 'string' && envKey.trim().length > 20 && !envKey.includes('your-gemini')) {
     try {
       const [header, base64Data] = imageDataUrl.split(',');
@@ -218,23 +332,21 @@ export async function analyzeImageDefects(
 Reporter Category: "${category}".
 Analyze the attached photo carefully.
 
-VERIFY GENUINENESS OF REPORT:
-- GENUINE CAMPUS DEFECTS (is_genuine MUST BE true):
-  Leaking pipes, damaged taps, broken flush, flooded/unhygienic restrooms, damp walls, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
-- NOT GENUINE (is_genuine MUST BE false):
-  * NO DEFECT VISIBLE or facility is in normal clean condition.
-  * Photo is TOO BLURRY, OUT OF FOCUS, UNCLEAR, or OBSCURED to detect specific defects.
-  * Selfies, faces, personal portraits, memes, cartoons, screenshots of apps/phones.
-  * Random unrelated objects (food, drinks, pets, animals, vehicles, clothes, shoes, personal gadgets).
-  * Blank, black, or white screens.
+ABSOLUTE PROHIBITION ON SELFIES, PORTRAITS, AND FACES:
+1. DOES THE PHOTO SHOW A HUMAN FACE, PERSON, STUDENT, SELFIE, OR BODY?
+   - If YES, you MUST IMMEDIATELY REJECT the submission with "is_genuine": false!
+   - You MUST NOT inspect the background, wall, floor, or room behind the person!
+   - Even if the person is standing in front of a wall, door, or fixture, ANY PHOTO CONTAINING A PERSON OR SELFIE IS STRICTLY NON-GENUINE.
+   - Rejection Reason: "Photo contains a selfie or person. Facility reports must show only the physical defect, without people."
+   - Set "severity_score": 1.0 and tags: ["selfie_detected", "personal_portrait", "no_facility_defect"].
 
-CRITICAL ENFORCEMENT RULES:
-1. If NO DEFECT is visible or if the photo is blurry, dark, or out of focus:
-   - You MUST set "is_genuine": false!
-   - You MUST state the exact rejection reason in "rejection_reason"!
-   - Set "severity_score": 1.0!
-2. ONLY set "is_genuine": true if an ACTUAL PHYSICAL DEFECT or DAMAGE is clearly visible.
-3. If you use tags like "no_detectable_defects", "image_unclear", "no_defect", "blurry", "intact", "normal_condition", "is_genuine" MUST BE false!
+2. WALL DEFECT CRITERIA:
+   - Plain painted walls, normal clean walls, wall shadows, or minor cosmetic paint variations ARE NOT DEFECTS!
+   - Do NOT report defects on walls unless there is active water bursting, heavy black mold, or a massive structural fissure/hole.
+   - If a photo depicts an ordinary wall or a person in front of a wall, set "is_genuine": false!
+
+3. GENUINE CAMPUS DEFECTS (ONLY when NO person is in photo):
+   Leaking pipes, broken taps, broken flush, flooded/unhygienic restrooms, damp walls with heavy mold, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
 
 Return ONLY valid JSON matching this schema:
 {
@@ -301,7 +413,7 @@ Return ONLY valid JSON matching this schema:
             ? parsed.defect_tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
             : ['defect_detected', 'urgent_inspection'];
           const rawSummary = parsed.summary || '';
-          const validation = validateGenuineness(parsed.is_genuine, rawTags, rawSummary, parsed.rejection_reason);
+          const validation = validateGenuineness(parsed.is_genuine, rawTags, rawSummary, parsed.rejection_reason, category);
 
           return {
             isGenuine: validation.isGenuine,
@@ -315,7 +427,37 @@ Return ONLY valid JSON matching this schema:
         }
       }
     } catch (err) {
-      console.warn('System Gemini Vision call bypassed, running Autonomous Vision Engine:', err);
+      console.warn('Direct Gemini Vision call error, checking secondary Edge Function:', err);
+    }
+  }
+
+  // 3. Secondary: Supabase Edge Function fallback
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-defect', {
+        body: { imageDataUrl, category },
+      });
+
+      if (!error && data && (data.is_genuine !== undefined || Array.isArray(data.tags))) {
+        console.log('⚡ Edge Function Vision result:', data);
+        const rawTags = Array.isArray(data.tags)
+          ? data.tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
+          : ['defect_detected'];
+        const rawSummary = data.summary || '';
+        const validation = validateGenuineness(data.is_genuine, rawTags, rawSummary, data.rejection_reason, category);
+
+        return {
+          isGenuine: validation.isGenuine,
+          rejectionReason: validation.rejectionReason,
+          tags: rawTags,
+          severityScore: validation.isGenuine ? Number(data.severityScore) || 8.0 : 1.0,
+          summary: rawSummary || (validation.isGenuine ? 'Defect verified by Gemini via Edge Function.' : 'Report rejected by AI.'),
+          isRealAI: true,
+          modelUsed: data.modelUsed || 'Google Gemini 2.5 Flash (Supabase Edge Function)',
+        };
+      }
+    } catch (edgeErr) {
+      console.warn('Notice: Supabase Edge Function bypassed, falling back to Autonomous Engine:', edgeErr);
     }
   }
 

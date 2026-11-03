@@ -47,23 +47,21 @@ Deno.serve(async (req: Request) => {
 Reporter Category: "${category}".
 Analyze the attached photo carefully.
 
-VERIFY GENUINENESS OF REPORT:
-- GENUINE CAMPUS DEFECTS (is_genuine MUST BE true):
-  Leaking pipes, damaged taps, broken flush, flooded/unhygienic restrooms, damp walls, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
-- NOT GENUINE (is_genuine MUST BE false):
-  * NO DEFECT VISIBLE or facility is in normal clean condition.
-  * Photo is TOO BLURRY, OUT OF FOCUS, UNCLEAR, or OBSCURED to detect specific defects.
-  * Selfies, faces, personal portraits, memes, cartoons, screenshots of apps/phones.
-  * Random unrelated objects (food, drinks, pets, animals, vehicles, clothes, shoes, personal gadgets).
-  * Blank, black, or white screens.
+ABSOLUTE PROHIBITION ON SELFIES, PORTRAITS, AND FACES:
+1. DOES THE PHOTO SHOW A HUMAN FACE, PERSON, STUDENT, SELFIE, OR BODY?
+   - If YES, you MUST IMMEDIATELY REJECT the submission with "is_genuine": false!
+   - You MUST NOT inspect the background, wall, floor, or room behind the person!
+   - Even if the person is standing in front of a wall, door, or fixture, ANY PHOTO CONTAINING A PERSON OR SELFIE IS STRICTLY NON-GENUINE.
+   - Rejection Reason: "Photo contains a selfie or person. Facility reports must show only the physical defect, without people."
+   - Set "severity_score": 1.0 and tags: ["selfie_detected", "personal_portrait", "no_facility_defect"].
 
-CRITICAL ENFORCEMENT RULES:
-1. If NO DEFECT is visible or if the photo is blurry, dark, or out of focus:
-   - You MUST set "is_genuine": false!
-   - You MUST state the exact rejection reason in "rejection_reason"!
-   - Set "severity_score": 1.0!
-2. ONLY set "is_genuine": true if an ACTUAL PHYSICAL DEFECT or DAMAGE is clearly visible.
-3. If you use tags like "no_detectable_defects", "image_unclear", "no_defect", "blurry", "intact", "normal_condition", "is_genuine" MUST BE false!
+2. WALL DEFECT CRITERIA:
+   - Plain painted walls, normal clean walls, wall shadows, or minor cosmetic paint variations ARE NOT DEFECTS!
+   - Do NOT report defects on walls unless there is active water bursting, heavy black mold, or a massive structural fissure/hole.
+   - If a photo depicts an ordinary wall or a person in front of a wall, set "is_genuine": false!
+
+3. GENUINE CAMPUS DEFECTS (ONLY when NO person is in photo):
+   Leaking pipes, broken taps, broken flush, flooded/unhygienic restrooms, damp walls with heavy mold, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
 
 Return ONLY valid JSON matching this schema:
 {
@@ -142,6 +140,28 @@ Return ONLY valid JSON matching this schema:
     const cleanJson = rawText.replace(/```json\n?|```/g, '').trim();
     const parsed = JSON.parse(cleanJson);
 
+    const PERSON_PATTERNS = [
+      'selfie',
+      'face',
+      'person',
+      'human',
+      'portrait',
+      'headshot',
+      'student',
+      'people',
+      'man',
+      'woman',
+      'boy',
+      'girl',
+      'posing',
+      'individual',
+      'personal_photo',
+      'personal_portrait',
+      'smile',
+      'smiling',
+      'skin',
+    ];
+
     const INVALID_PATTERNS = [
       'no_detectable_defects',
       'no_detectable_defect',
@@ -162,11 +182,18 @@ Return ONLY valid JSON matching this schema:
       'normal_condition',
       'not_damaged',
       'working_properly',
+      'plain_wall',
+      'normal_wall',
+      'wall_background',
     ];
 
     const rawTags = Array.isArray(parsed.defect_tags)
       ? parsed.defect_tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
       : ['defect_detected', 'urgent_inspection'];
+
+    const hasPersonTag = rawTags.some((t: string) =>
+      PERSON_PATTERNS.some((p) => t === p || t.includes(`_${p}`) || t.includes(`${p}_`))
+    );
 
     const hasInvalidTag = rawTags.some((t: string) =>
       INVALID_PATTERNS.some((bad) => t.includes(bad))
@@ -174,6 +201,20 @@ Return ONLY valid JSON matching this schema:
 
     const summary = String(parsed.summary || '');
     const sumLower = summary.toLowerCase();
+    const rejLower = String(parsed.rejection_reason || '').toLowerCase();
+
+    const hasPersonInText =
+      sumLower.includes('selfie') ||
+      sumLower.includes('portrait') ||
+      sumLower.includes('person') ||
+      sumLower.includes('human face') ||
+      sumLower.includes('student') ||
+      sumLower.includes('face') ||
+      rejLower.includes('selfie') ||
+      rejLower.includes('person') ||
+      rejLower.includes('portrait') ||
+      rejLower.includes('face');
+
     const hasNoDefectSummary =
       sumLower.includes('no detectable defect') ||
       sumLower.includes('no specific physical defect') ||
@@ -185,13 +226,26 @@ Return ONLY valid JSON matching this schema:
       sumLower.includes('out of focus') ||
       sumLower.includes('unable to detect') ||
       sumLower.includes('cannot detect') ||
-      sumLower.includes('normal condition');
+      sumLower.includes('normal condition') ||
+      sumLower.includes('wall in the background') ||
+      sumLower.includes('plain wall');
 
-    let isGenuine = parsed.is_genuine === true && !hasInvalidTag && !hasNoDefectSummary;
+    let isGenuine =
+      parsed.is_genuine === true &&
+      !hasPersonTag &&
+      !hasPersonInText &&
+      !hasInvalidTag &&
+      !hasNoDefectSummary;
+
     let rejectionReason = parsed.rejection_reason;
 
     if (!isGenuine && (!rejectionReason || !rejectionReason.trim())) {
-      rejectionReason = summary || 'Photo rejected: No visible physical facility defect or damage detected.';
+      if (hasPersonTag || hasPersonInText) {
+        rejectionReason =
+          'Photo contains a selfie, human face, or person. Campus facility reports must photograph only the physical defect, without people.';
+      } else {
+        rejectionReason = summary || 'Photo rejected: No visible physical facility defect or damage detected.';
+      }
     }
 
     const result = {
