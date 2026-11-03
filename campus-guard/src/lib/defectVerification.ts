@@ -674,3 +674,4 @@ Return ONLY valid JSON matching this schema:
     modelUsed: 'CampusPulse Computer Vision Engine',
   };
 }
+
