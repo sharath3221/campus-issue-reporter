@@ -27,7 +27,7 @@ import { useIncidents } from '../hooks/useIncidents';
 import {
   analyzeImageDefects,
   VisionAnalysisResult,
-} from '../lib/geminiVision';
+} from '../lib/defectVerification';
 import { supabase, isSupabaseConfigured, uploadIncidentMedia } from '../lib/supabaseClient';
 import confetti from 'canvas-confetti';
 import { motion, AnimatePresence } from 'framer-motion';
