@@ -87,10 +87,89 @@ async function extractVisualFeatures(imageDataUrl: string): Promise<{
 }
 
 /**
+ * Strict validator to ensure an image actually shows a genuine, detectable facility defect.
+ * Blocks any result with tags like 'no_detectable_defects', 'image_unclear', 'blurry',
+ * or summaries stating no damage or unidentifiable defect.
+ */
+export function validateGenuineness(
+  rawIsGenuine: boolean | undefined,
+  tags: string[],
+  summary: string,
+  rejectionReason?: string
+): { isGenuine: boolean; rejectionReason?: string } {
+  const INVALID_PATTERNS = [
+    'no_detectable_defects',
+    'no_detectable_defect',
+    'no_defect_detected',
+    'no_defects_detected',
+    'no_defect',
+    'no_defects',
+    'no_damage',
+    'no_issue',
+    'no_fault',
+    'no_hazard',
+    'not_damaged',
+    'image_unclear',
+    'blurry',
+    'too_blurry',
+    'out_of_focus',
+    'unclear_image',
+    'unidentifiable',
+    'insufficient_details',
+    'insufficient_evidence',
+    'normal_condition',
+    'intact',
+    'working_properly',
+    'working_normally',
+    'blank_or_obscured_image',
+    'cannot_detect',
+    'unable_to_detect',
+  ];
+
+  const hasInvalidTag = tags.some((t) => {
+    const cleanT = t.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    return INVALID_PATTERNS.some((pat) => cleanT.includes(pat));
+  });
+
+  const sumLower = (summary || '').toLowerCase();
+  const hasNoDefectSummary =
+    sumLower.includes('no detectable defect') ||
+    sumLower.includes('no specific physical defect') ||
+    sumLower.includes('no physical defect') ||
+    sumLower.includes('no defect') ||
+    sumLower.includes('no visible damage') ||
+    sumLower.includes('no damage') ||
+    sumLower.includes('too blurry') ||
+    sumLower.includes('out of focus') ||
+    sumLower.includes('unable to detect') ||
+    sumLower.includes('cannot detect') ||
+    sumLower.includes('not enough detail') ||
+    sumLower.includes('unclear and blurry') ||
+    sumLower.includes('normal condition') ||
+    sumLower.includes('in good condition');
+
+  if (rawIsGenuine === false || hasInvalidTag || hasNoDefectSummary) {
+    let reason = rejectionReason;
+    if (!reason || reason.trim().length === 0) {
+      if (hasNoDefectSummary && summary.trim().length > 0) {
+        reason = summary.trim();
+      } else if (hasInvalidTag) {
+        reason = 'No physical defects or damage could be detected in this photo. Please photograph the physical defect clearly.';
+      } else {
+        reason = 'Photo rejected: Not identified as a genuine campus facility defect.';
+      }
+    }
+    return { isGenuine: false, rejectionReason: reason };
+  }
+
+  return { isGenuine: true };
+}
+
+/**
  * Autonomous AI Computer Vision Engine with Genuine Report Verification
  * Uses Google Gemini 2.5 Flash Vision to inspect the photo for authenticity:
  * - If genuine campus facility defect: returns verified defect tags and severity score.
- * - If fake/unrelated/meme/selfie/spam: marks isGenuine = false and provides rejectionReason.
+ * - If fake/unrelated/meme/selfie/spam/no-defect: marks isGenuine = false and provides rejectionReason.
  */
 export async function analyzeImageDefects(
   imageDataUrl: string,
@@ -105,15 +184,18 @@ export async function analyzeImageDefects(
 
       if (!error && data && (data.is_genuine !== undefined || Array.isArray(data.tags))) {
         console.log('⚡ Edge Function Vision result:', data);
-        const isGenuine = data.is_genuine !== false;
+        const rawTags = Array.isArray(data.tags)
+          ? data.tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
+          : ['defect_detected'];
+        const rawSummary = data.summary || '';
+        const validation = validateGenuineness(data.is_genuine, rawTags, rawSummary, data.rejection_reason);
+
         return {
-          isGenuine,
-          rejectionReason: !isGenuine
-            ? data.rejection_reason || 'Image rejected: Not identified as a genuine campus facility defect.'
-            : undefined,
-          tags: Array.isArray(data.tags) ? data.tags : ['defect_detected'],
-          severityScore: Number(data.severityScore) || (isGenuine ? 8.0 : 1.0),
-          summary: data.summary || (isGenuine ? 'Defect verified by Gemini via Edge Function.' : 'Report rejected by AI.'),
+          isGenuine: validation.isGenuine,
+          rejectionReason: validation.rejectionReason,
+          tags: rawTags,
+          severityScore: validation.isGenuine ? Number(data.severityScore) || 8.0 : 1.0,
+          summary: rawSummary || (validation.isGenuine ? 'Defect verified by Gemini via Edge Function.' : 'Report rejected by AI.'),
           isRealAI: true,
           modelUsed: data.modelUsed || 'Google Gemini 2.5 Flash (Supabase Edge Function)',
         };
@@ -137,8 +219,22 @@ Reporter Category: "${category}".
 Analyze the attached photo carefully.
 
 VERIFY GENUINENESS OF REPORT:
-- GENUINE CAMPUS DEFECTS INCLUDE: Leaking pipes, damaged taps, broken flush, flooded/unhygienic restrooms, damp walls, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
-- NOT GENUINE (MUST REJECT): Selfies, faces, personal portraits, memes, cartoons, screenshots of apps/phones, random unrelated objects (food, drinks, pets, animals, vehicles, clothes, shoes, personal gadgets), blank/black/white screens, completely blurred/unidentifiable surfaces without visible defect, or prank submissions.
+- GENUINE CAMPUS DEFECTS (is_genuine MUST BE true):
+  Leaking pipes, damaged taps, broken flush, flooded/unhygienic restrooms, damp walls, broken tiles, broken fans, flickering/dead lights, hanging wires, damaged electrical sockets, broken projectors, dirty washrooms, uncleaned litter, clogged drains, broken desks, fractured chairs, cracked doors, loose blackboard, damaged benches, or physical structural damage in an educational campus.
+- NOT GENUINE (is_genuine MUST BE false):
+  * NO DEFECT VISIBLE or facility is in normal clean condition.
+  * Photo is TOO BLURRY, OUT OF FOCUS, UNCLEAR, or OBSCURED to detect specific defects.
+  * Selfies, faces, personal portraits, memes, cartoons, screenshots of apps/phones.
+  * Random unrelated objects (food, drinks, pets, animals, vehicles, clothes, shoes, personal gadgets).
+  * Blank, black, or white screens.
+
+CRITICAL ENFORCEMENT RULES:
+1. If NO DEFECT is visible or if the photo is blurry, dark, or out of focus:
+   - You MUST set "is_genuine": false!
+   - You MUST state the exact rejection reason in "rejection_reason"!
+   - Set "severity_score": 1.0!
+2. ONLY set "is_genuine": true if an ACTUAL PHYSICAL DEFECT or DAMAGE is clearly visible.
+3. If you use tags like "no_detectable_defects", "image_unclear", "no_defect", "blurry", "intact", "normal_condition", "is_genuine" MUST BE false!
 
 Return ONLY valid JSON matching this schema:
 {
@@ -201,18 +297,18 @@ Return ONLY valid JSON matching this schema:
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (rawText) {
           const parsed = JSON.parse(rawText.replace(/```json\n?|```/g, '').trim());
-          const isGenuine = parsed.is_genuine !== false;
+          const rawTags = Array.isArray(parsed.defect_tags)
+            ? parsed.defect_tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
+            : ['defect_detected', 'urgent_inspection'];
+          const rawSummary = parsed.summary || '';
+          const validation = validateGenuineness(parsed.is_genuine, rawTags, rawSummary, parsed.rejection_reason);
 
           return {
-            isGenuine,
-            rejectionReason: !isGenuine
-              ? parsed.rejection_reason || 'The uploaded photo was not identified as a genuine campus facility defect.'
-              : undefined,
-            tags: Array.isArray(parsed.defect_tags)
-              ? parsed.defect_tags.map((t: string) => t.toLowerCase().replace(/\s+/g, '_'))
-              : ['defect_detected', 'urgent_inspection'],
-            severityScore: Number(parsed.severity_score) || (isGenuine ? 8.0 : 1.0),
-            summary: parsed.summary || (isGenuine ? 'Defect verified by Gemini 2.5 Flash Vision.' : 'Report rejected by AI.'),
+            isGenuine: validation.isGenuine,
+            rejectionReason: validation.rejectionReason,
+            tags: rawTags,
+            severityScore: validation.isGenuine ? Number(parsed.severity_score) || 8.0 : 1.0,
+            summary: rawSummary || (validation.isGenuine ? 'Defect verified by Gemini 2.5 Flash Vision.' : 'Report rejected by AI.'),
             isRealAI: true,
             modelUsed: 'Google Gemini 2.5 Flash Vision',
           };

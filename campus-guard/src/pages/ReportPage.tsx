@@ -265,8 +265,14 @@ export const ReportPage: React.FC = () => {
       return;
     }
 
-    // Enforce Gemini Genuineness Verification
-    if (visionResult && !visionResult.isGenuine) {
+    // Enforce Gemini Genuineness Verification & No-Defect Rejection
+    const hasNoDefectTag = cvTags.some((t) =>
+      ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear', 'insufficient'].some((bad) =>
+        t.toLowerCase().includes(bad)
+      )
+    );
+
+    if (!visionResult || !visionResult.isGenuine || hasNoDefectTag) {
       return;
     }
 
@@ -930,19 +936,52 @@ export const ReportPage: React.FC = () => {
                         <Sparkles size={14} color="#0288D1" />
                         AI Computer Vision Defect Tags
                       </span>
-                      <span
-                        style={{
-                          fontSize: '0.62rem',
-                          padding: '1px 6px',
-                          borderRadius: 4,
-                          fontWeight: 800,
-                          background: '#ECFDF5',
-                          color: '#059669',
-                          border: '1px solid #A7F3D0',
-                        }}
-                      >
-                        ✓ Analyzed
-                      </span>
+                      {visionResult && (
+                        <span
+                          style={{
+                            fontSize: '0.62rem',
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            fontWeight: 800,
+                            background:
+                              !visionResult.isGenuine ||
+                              cvTags.some((t) =>
+                                ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some(
+                                  (bad) => t.toLowerCase().includes(bad)
+                                )
+                              )
+                                ? '#FEE2E2'
+                                : '#ECFDF5',
+                            color:
+                              !visionResult.isGenuine ||
+                              cvTags.some((t) =>
+                                ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some(
+                                  (bad) => t.toLowerCase().includes(bad)
+                                )
+                              )
+                                ? '#DC2626'
+                                : '#059669',
+                            border:
+                              !visionResult.isGenuine ||
+                              cvTags.some((t) =>
+                                ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some(
+                                  (bad) => t.toLowerCase().includes(bad)
+                                )
+                              )
+                                ? '1px solid #FCA5A5'
+                                : '1px solid #A7F3D0',
+                          }}
+                        >
+                          {!visionResult.isGenuine ||
+                          cvTags.some((t) =>
+                            ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some(
+                              (bad) => t.toLowerCase().includes(bad)
+                            )
+                          )
+                            ? '❌ Rejected / No Defect Detected'
+                            : '✓ Verified Genuine Defect'}
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -972,26 +1011,55 @@ export const ReportPage: React.FC = () => {
                   ) : (
                     <>
                       {visionResult?.summary && (
-                        <div style={{ fontSize: '0.72rem', color: '#334155', fontWeight: 600, marginBottom: 6, fontStyle: 'italic', lineHeight: 1.3 }}>
+                        <div
+                          style={{
+                            fontSize: '0.72rem',
+                            color:
+                              !visionResult.isGenuine ||
+                              cvTags.some((t) =>
+                                ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some(
+                                  (bad) => t.toLowerCase().includes(bad)
+                                )
+                              )
+                                ? '#B91C1C'
+                                : '#334155',
+                            fontWeight: 600,
+                            marginBottom: 6,
+                            fontStyle: 'italic',
+                            lineHeight: 1.3,
+                          }}
+                        >
                           "{visionResult.summary}"
                         </div>
                       )}
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        {cvTags.map((tag) => (
-                          <span
-                            key={tag}
-                            style={{
-                              fontSize: '0.68rem',
-                              background: '#E0F2FE',
-                              color: '#0369A1',
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                              fontWeight: 700,
-                            }}
-                          >
-                            #{tag}
-                          </span>
-                        ))}
+                        {cvTags.map((tag) => {
+                          const isInvalidTag = [
+                            'no_detectable_defects',
+                            'image_unclear',
+                            'no_defect',
+                            'no_damage',
+                            'blurry',
+                            'unclear',
+                          ].some((bad) => tag.toLowerCase().includes(bad));
+
+                          return (
+                            <span
+                              key={tag}
+                              style={{
+                                fontSize: '0.68rem',
+                                background: isInvalidTag ? '#FEF2F2' : '#E0F2FE',
+                                color: isInvalidTag ? '#DC2626' : '#0369A1',
+                                border: isInvalidTag ? '1px solid #FECACA' : 'none',
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                fontWeight: 700,
+                              }}
+                            >
+                              #{tag}
+                            </span>
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -999,71 +1067,78 @@ export const ReportPage: React.FC = () => {
               </div>
             )}
 
-            {/* GEMINI REJECTION ALERT CARD (IF NON-GENUINE PHOTO) */}
-            {visionResult && !visionResult.isGenuine && (
-              <div
-                style={{
-                  background: '#FEF2F2',
-                  border: '2px solid #EF4444',
-                  borderRadius: 14,
-                  padding: '14px 16px',
-                  marginTop: 10,
-                  display: 'flex',
-                  gap: 12,
-                }}
-              >
+            {/* GEMINI REJECTION ALERT CARD (IF NON-GENUINE PHOTO OR NO DEFECT) */}
+            {visionResult &&
+              (!visionResult.isGenuine ||
+                cvTags.some((t) =>
+                  ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some((bad) =>
+                    t.toLowerCase().includes(bad)
+                  )
+                )) && (
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    background: '#FEE2E2',
-                    color: '#DC2626',
+                    background: '#FEF2F2',
+                    border: '2px solid #EF4444',
+                    borderRadius: 14,
+                    padding: '14px 16px',
+                    marginTop: 10,
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
+                    gap: 12,
                   }}
                 >
-                  <AlertCircle size={20} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ fontSize: '0.9rem', fontWeight: 900, color: '#991B1B', margin: '0 0 4px' }}>
-                    ❌ Report Rejected by AI Verification
-                  </h4>
-                  <p style={{ fontSize: '0.78rem', color: '#B91C1C', margin: '0 0 6px', lineHeight: 1.4 }}>
-                    {visionResult.rejectionReason ||
-                      'The uploaded photo does not appear to be a genuine campus facility defect. Memes, selfies, blank images, or unrelated objects cannot be submitted.'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhotoPreview(null);
-                      setCvTags([]);
-                      setVisionResult(null);
-                      openCamera();
-                    }}
+                  <div
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: 8,
-                      background: '#DC2626',
-                      color: 'white',
-                      border: 'none',
-                      fontSize: '0.75rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: '#FEE2E2',
+                      color: '#DC2626',
+                      display: 'flex',
                       alignItems: 'center',
-                      gap: 4,
-                      marginTop: 4,
+                      justifyContent: 'center',
+                      flexShrink: 0,
                     }}
                   >
-                    <RefreshCw size={12} />
-                    Retake Defect Photo
-                  </button>
+                    <AlertCircle size={20} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 900, color: '#991B1B', margin: '0 0 4px' }}>
+                      ❌ Report Rejected by AI Verification
+                    </h4>
+                    <p style={{ fontSize: '0.78rem', color: '#B91C1C', margin: '0 0 6px', lineHeight: 1.4 }}>
+                      {visionResult.rejectionReason ||
+                        visionResult.summary ||
+                        'The uploaded photo does not appear to show a detectable campus facility defect. Blurry photos, memes, selfies, blank images, or undamaged surfaces cannot be submitted.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoPreview(null);
+                        setCvTags([]);
+                        setVisionResult(null);
+                        openCamera();
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 8,
+                        background: '#DC2626',
+                        color: 'white',
+                        border: 'none',
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        marginTop: 4,
+                      }}
+                    >
+                      <RefreshCw size={12} />
+                      Retake Defect Photo
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Error Message if User Tries to Submit Without Photo */}
             {showPhotoError && !photoPreview && (
@@ -1087,8 +1162,14 @@ export const ReportPage: React.FC = () => {
             )}
           </div>
 
-          {/* Submission Button: Blocked if Rejected by Gemini */}
-          {visionResult && !visionResult.isGenuine ? (
+          {/* Submission Button: Blocked if Rejected by Gemini or No Detectable Defect */}
+          {visionResult &&
+          (!visionResult.isGenuine ||
+            cvTags.some((t) =>
+              ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some((bad) =>
+                t.toLowerCase().includes(bad)
+              )
+            )) ? (
             <div
               style={{
                 width: '100%',
@@ -1102,7 +1183,7 @@ export const ReportPage: React.FC = () => {
                 textAlign: 'center',
               }}
             >
-              ❌ Submission Blocked — Photo Rejected as Non-Genuine
+              ❌ Submission Blocked — No Detectable Facility Defect
             </div>
           ) : (
             <button

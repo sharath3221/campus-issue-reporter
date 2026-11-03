@@ -349,8 +349,14 @@ export const FloorReportPage: React.FC = () => {
       return;
     }
 
-    // 3. ENFORCE GEMINI GENUINENESS VERIFICATION
-    if (visionResult && !visionResult.isGenuine) {
+    // 3. ENFORCE GEMINI GENUINENESS VERIFICATION & NO-DEFECT REJECTION
+    const hasNoDefectTag = cvTags.some((t) =>
+      ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear', 'insufficient'].some((bad) =>
+        t.toLowerCase().includes(bad)
+      )
+    );
+
+    if (!visionResult || !visionResult.isGenuine || hasNoDefectTag) {
       return;
     }
 
@@ -1206,8 +1212,13 @@ export const FloorReportPage: React.FC = () => {
               {/* CRITICAL: GEMINI GENUINENESS VERIFICATION & REJECTION UI */}
               {visionResult && !isAnalyzingCV && (
                 <div>
-                  {!visionResult.isGenuine ? (
-                    /* REJECTION CARD: NON-GENUINE REPORT */
+                  {!visionResult.isGenuine ||
+                  cvTags.some((t) =>
+                    ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some((bad) =>
+                      t.toLowerCase().includes(bad)
+                    )
+                  ) ? (
+                    /* REJECTION CARD: NON-GENUINE REPORT OR NO DEFECT */
                     <div
                       style={{
                         background: '#FEF2F2',
@@ -1239,7 +1250,8 @@ export const FloorReportPage: React.FC = () => {
                           </h4>
                           <p style={{ fontSize: '0.78rem', color: '#B91C1C', margin: '0 0 8px', lineHeight: 1.4 }}>
                             {visionResult.rejectionReason ||
-                              'This photo does not depict a genuine campus facility defect. Memes, selfies, blank images, or unrelated objects cannot be submitted.'}
+                              visionResult.summary ||
+                              'This photo does not depict a genuine campus facility defect. Blurry photos, memes, selfies, blank images, or undamaged surfaces cannot be submitted.'}
                           </p>
                           <div style={{ fontSize: '0.72rem', color: '#7F1D1D', marginBottom: 10 }}>
                             <b>Verification Policy:</b> CampusPulse only accepts genuine educational facility defects
@@ -1331,7 +1343,13 @@ export const FloorReportPage: React.FC = () => {
             </div>
 
             {/* 5. Submit Action Button */}
-            {visionResult && !visionResult.isGenuine ? (
+            {visionResult &&
+            (!visionResult.isGenuine ||
+              cvTags.some((t) =>
+                ['no_detectable_defects', 'image_unclear', 'no_defect', 'no_damage', 'blurry', 'unclear'].some((bad) =>
+                  t.toLowerCase().includes(bad)
+                )
+              )) ? (
               /* Blocked Button when rejected */
               <div
                 style={{
@@ -1346,7 +1364,7 @@ export const FloorReportPage: React.FC = () => {
                   textAlign: 'center',
                 }}
               >
-                ❌ Submission Blocked — Photo Rejected as Non-Genuine
+                ❌ Submission Blocked — No Detectable Facility Defect
               </div>
             ) : (
               /* Standard Submit Button */
