@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield,
@@ -24,6 +24,12 @@ import {
   Compass,
   Building,
   UserPlus,
+  Search,
+  X,
+  RotateCcw,
+  SlidersHorizontal,
+  ArrowUpDown,
+  Globe,
 } from 'lucide-react';
 import {
   IncidentTicket,
@@ -97,8 +103,7 @@ export const AdminDashboardPage: React.FC = () => {
     navigate('/admin/login');
   };
 
-  // Filters & State
-  const [statusFilter, setStatusFilter] = useState<TicketStatus | 'ALL'>('ALL');
+  // Map Navigation State
   const [selectedFloor, setSelectedFloor] = useState<number>(1);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
@@ -134,6 +139,142 @@ export const AdminDashboardPage: React.FC = () => {
     }
   }, [availableMapFloors, selectedFloor]);
 
+  // =========================================================================
+  // Comprehensive Omni-Channel Ticket Filters (Campus-Wide / Irrespective of Block)
+  // =========================================================================
+  const [ticketSearchQuery, setTicketSearchQuery] = useState<string>('');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<TicketStatus | 'ALL' | 'CRITICAL'>('ALL');
+  const [ticketCategoryFilter, setTicketCategoryFilter] = useState<IncidentCategory | 'ALL'>('ALL');
+  const [ticketBuildingFilter, setTicketBuildingFilter] = useState<string>('ALL');
+  const [ticketFloorFilter, setTicketFloorFilter] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<'SEVERITY_DESC' | 'DUPLICATES_DESC' | 'NEWEST'>('SEVERITY_DESC');
+
+  // Extract all unique building names across the entire institution
+  const allCampusBuildingNames = useMemo(() => {
+    const fromLocs = campusLocations.map((l) => l.building_name);
+    const fromTickets = tickets.map((t) => t.location?.building_name).filter(Boolean) as string[];
+    const unique = Array.from(new Set([...fromLocs, ...fromTickets])).filter(Boolean);
+    return unique.sort();
+  }, [campusLocations, tickets]);
+
+  // Extract all unique floor numbers across the entire institution
+  const allCampusFloors = useMemo(() => {
+    const fromLocs = campusLocations.map((l) => l.floor_number);
+    const fromTickets = tickets
+      .map((t) => t.location?.floor_number)
+      .filter((f) => typeof f === 'number') as number[];
+    const unique = Array.from(new Set([...fromLocs, ...fromTickets]));
+    return unique.sort((a, b) => a - b);
+  }, [campusLocations, tickets]);
+
+  // Count active filters
+  const activeFiltersCount =
+    (ticketStatusFilter !== 'ALL' ? 1 : 0) +
+    (ticketCategoryFilter !== 'ALL' ? 1 : 0) +
+    (ticketBuildingFilter !== 'ALL' ? 1 : 0) +
+    (ticketFloorFilter !== 'ALL' ? 1 : 0) +
+    (ticketSearchQuery.trim() ? 1 : 0);
+
+  // Reset all filters back to campus-wide view
+  const handleResetFilters = () => {
+    setTicketSearchQuery('');
+    setTicketStatusFilter('ALL');
+    setTicketCategoryFilter('ALL');
+    setTicketBuildingFilter('ALL');
+    setTicketFloorFilter('ALL');
+    setSortBy('SEVERITY_DESC');
+  };
+
+  // 1-Click Locate on Spatial Map: Switches building and floor, highlights room
+  const handleLocateOnMap = (ticket: IncidentTicket) => {
+    if (ticket.location?.building_name) {
+      setSelectedMapBuilding(ticket.location.building_name);
+    }
+    if (typeof ticket.location?.floor_number === 'number') {
+      setSelectedFloor(ticket.location.floor_number);
+    }
+    setSelectedTicketId(ticket.ticket_id);
+
+    const mapEl = document.getElementById('spatial-campus-blueprint-container');
+    if (mapEl) {
+      mapEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
+
+  // Filtered and Sorted Tickets (Irrespective of floor / building block by default)
+  const filteredTickets = useMemo(() => {
+    let result = [...tickets];
+
+    // 1. Status / Critical Filter
+    if (ticketStatusFilter === 'CRITICAL') {
+      result = result.filter((t) => t.ai_severity_score >= 80 && t.status !== 'RESOLVED');
+    } else if (ticketStatusFilter !== 'ALL') {
+      result = result.filter((t) => t.status === ticketStatusFilter);
+    }
+
+    // 2. Category Filter
+    if (ticketCategoryFilter !== 'ALL') {
+      result = result.filter((t) => t.category === ticketCategoryFilter);
+    }
+
+    // 3. Building / Block Filter
+    if (ticketBuildingFilter !== 'ALL') {
+      result = result.filter(
+        (t) => t.location?.building_name?.toLowerCase() === ticketBuildingFilter.toLowerCase()
+      );
+    }
+
+    // 4. Floor Filter
+    if (ticketFloorFilter !== 'ALL') {
+      const flNum = Number(ticketFloorFilter);
+      result = result.filter((t) => t.location?.floor_number === flNum);
+    }
+
+    // 5. Keyword & Room Search Filter
+    if (ticketSearchQuery.trim()) {
+      const q = ticketSearchQuery.trim().toLowerCase();
+      result = result.filter((t) => {
+        const room = (t.location?.room_number || '').toLowerCase();
+        const bld = (t.location?.building_name || '').toLowerCase();
+        const tid = (t.ticket_id || '').toLowerCase();
+        const tags = (t.ai_vision_tags || []).join(' ').toLowerCase();
+        const transcript = (t.voice_transcript || '').toLowerCase();
+        const staffName = (t.assigned_staff?.full_name || '').toLowerCase();
+        const categoryLabel = (CATEGORY_META[t.category]?.label || '').toLowerCase();
+        return (
+          room.includes(q) ||
+          bld.includes(q) ||
+          tid.includes(q) ||
+          tags.includes(q) ||
+          transcript.includes(q) ||
+          staffName.includes(q) ||
+          categoryLabel.includes(q)
+        );
+      });
+    }
+
+    // 6. Sorting Order
+    if (sortBy === 'SEVERITY_DESC') {
+      result.sort((a, b) => b.ai_severity_score - a.ai_severity_score);
+    } else if (sortBy === 'DUPLICATES_DESC') {
+      result.sort((a, b) => (b.duplicate_count || 1) - (a.duplicate_count || 1));
+    } else if (sortBy === 'NEWEST') {
+      result.sort(
+        (a, b) => new Date(b.reported_at || 0).getTime() - new Date(a.reported_at || 0).getTime()
+      );
+    }
+
+    return result;
+  }, [
+    tickets,
+    ticketStatusFilter,
+    ticketCategoryFilter,
+    ticketBuildingFilter,
+    ticketFloorFilter,
+    ticketSearchQuery,
+    sortBy,
+  ]);
+
   // Dispatch Modal State
   const [dispatchModalTicket, setDispatchModalTicket] = useState<IncidentTicket | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
@@ -142,15 +283,6 @@ export const AdminDashboardPage: React.FC = () => {
   // Fixed Proof Upload Modal
   const [resolveModalTicket, setResolveModalTicket] = useState<IncidentTicket | null>(null);
   const [fixedPhotoInput, setFixedPhotoInput] = useState<string>('');
-
-  // Sort tickets by AI Severity Score (highest first)
-  const sortedTickets = [...tickets].sort((a, b) => b.ai_severity_score - a.ai_severity_score);
-
-  const filteredTickets = sortedTickets.filter((t) => {
-    if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
-    if (selectedFloor !== 0 && t.location?.floor_number !== selectedFloor) return false;
-    return true;
-  });
 
   // KPI calculations
   const totalReported = tickets.filter((t) => t.status === 'REPORTED').length;
@@ -486,28 +618,100 @@ export const AdminDashboardPage: React.FC = () => {
           />
         ) : (
           <>
-            {/* KPI Summary Cards */}
+            {/* KPI Summary Cards (Interactive Filters) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: '16px 20px', border: '1px solid #E2E8F0', borderLeft: '5px solid #EF4444', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Active Reported</div>
+          {/* Active Reported Card */}
+          <div
+            onClick={() => setTicketStatusFilter(ticketStatusFilter === 'REPORTED' ? 'ALL' : 'REPORTED')}
+            style={{
+              background: 'white',
+              borderRadius: 16,
+              padding: '16px 20px',
+              border: ticketStatusFilter === 'REPORTED' ? '2px solid #EF4444' : '1px solid #E2E8F0',
+              borderLeft: '5px solid #EF4444',
+              boxShadow: ticketStatusFilter === 'REPORTED' ? '0 4px 14px rgba(239, 68, 68, 0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Active Reported</span>
+              {ticketStatusFilter === 'REPORTED' && (
+                <span style={{ fontSize: '0.62rem', background: '#FEE2E2', color: '#DC2626', padding: '1px 6px', borderRadius: 6, fontWeight: 900 }}>FILTERED</span>
+              )}
+            </div>
             <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#DC2626', marginTop: 4 }}>{totalReported}</div>
             <div style={{ fontSize: '0.72rem', color: '#EF4444', fontWeight: 700 }}>Awaiting Technician Dispatch</div>
           </div>
 
-          <div style={{ background: 'white', borderRadius: 16, padding: '16px 20px', border: '1px solid #E2E8F0', borderLeft: '5px solid #F59E0B', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Dispatched & En Route</div>
+          {/* Dispatched & En Route Card */}
+          <div
+            onClick={() => setTicketStatusFilter(ticketStatusFilter === 'DISPATCHED' ? 'ALL' : 'DISPATCHED')}
+            style={{
+              background: 'white',
+              borderRadius: 16,
+              padding: '16px 20px',
+              border: ticketStatusFilter === 'DISPATCHED' ? '2px solid #F59E0B' : '1px solid #E2E8F0',
+              borderLeft: '5px solid #F59E0B',
+              boxShadow: ticketStatusFilter === 'DISPATCHED' ? '0 4px 14px rgba(245, 158, 11, 0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Dispatched & En Route</span>
+              {ticketStatusFilter === 'DISPATCHED' && (
+                <span style={{ fontSize: '0.62rem', background: '#FEF3C7', color: '#D97706', padding: '1px 6px', borderRadius: 6, fontWeight: 900 }}>FILTERED</span>
+              )}
+            </div>
             <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#D97706', marginTop: 4 }}>{totalDispatched}</div>
             <div style={{ fontSize: '0.72rem', color: '#D97706', fontWeight: 700 }}>Maintenance Team on Site</div>
           </div>
 
-          <div style={{ background: 'white', borderRadius: 16, padding: '16px 20px', border: '1px solid #E2E8F0', borderLeft: '5px solid #10B981', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Resolved with Proof</div>
+          {/* Resolved with Proof Card */}
+          <div
+            onClick={() => setTicketStatusFilter(ticketStatusFilter === 'RESOLVED' ? 'ALL' : 'RESOLVED')}
+            style={{
+              background: 'white',
+              borderRadius: 16,
+              padding: '16px 20px',
+              border: ticketStatusFilter === 'RESOLVED' ? '2px solid #10B981' : '1px solid #E2E8F0',
+              borderLeft: '5px solid #10B981',
+              boxShadow: ticketStatusFilter === 'RESOLVED' ? '0 4px 14px rgba(16, 185, 129, 0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Resolved with Proof</span>
+              {ticketStatusFilter === 'RESOLVED' && (
+                <span style={{ fontSize: '0.62rem', background: '#DCFCE7', color: '#15803D', padding: '1px 6px', borderRadius: 6, fontWeight: 900 }}>FILTERED</span>
+              )}
+            </div>
             <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#059669', marginTop: 4 }}>{totalResolved}</div>
             <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 700 }}>Fixed Photo Uploaded</div>
           </div>
 
-          <div style={{ background: 'white', borderRadius: 16, padding: '16px 20px', border: '1px solid #E2E8F0', borderLeft: '5px solid #8B5CF6', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Critical Urgency (&gt;80)</div>
+          {/* Critical Urgency Card */}
+          <div
+            onClick={() => setTicketStatusFilter(ticketStatusFilter === 'CRITICAL' ? 'ALL' : 'CRITICAL')}
+            style={{
+              background: 'white',
+              borderRadius: 16,
+              padding: '16px 20px',
+              border: ticketStatusFilter === 'CRITICAL' ? '2px solid #8B5CF6' : '1px solid #E2E8F0',
+              borderLeft: '5px solid #8B5CF6',
+              boxShadow: ticketStatusFilter === 'CRITICAL' ? '0 4px 14px rgba(139, 92, 246, 0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Critical Urgency (&gt;80)</span>
+              {ticketStatusFilter === 'CRITICAL' && (
+                <span style={{ fontSize: '0.62rem', background: '#EDE9FE', color: '#6D28D9', padding: '1px 6px', borderRadius: 6, fontWeight: 900 }}>FILTERED</span>
+              )}
+            </div>
             <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#7C3AED', marginTop: 4 }}>{criticalCount}</div>
             <div style={{ fontSize: '0.72rem', color: '#7C3AED', fontWeight: 700 }}>Multi-Student Clustered</div>
           </div>
@@ -517,6 +721,7 @@ export const AdminDashboardPage: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 24, alignItems: 'start' }}>
           {/* Column 1: LIVE SPATIAL CAMPUS MAP DASHBOARD (§3) */}
           <div
+            id="spatial-campus-blueprint-container"
             style={{
               background: 'white',
               borderRadius: 20,
@@ -599,51 +804,456 @@ export const AdminDashboardPage: React.FC = () => {
             />
           </div>
 
-          {/* Column 2: INCIDENT MANAGEMENT FEED (§3) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Filter Bar */}
+          {/* Column 2: INCIDENT MANAGEMENT FEED — OMNI-CHANNEL ACCESS (§3) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Comprehensive Filter Bar & Search Controls */}
             <div
               style={{
                 background: 'white',
-                borderRadius: 16,
-                padding: '12px 18px',
+                borderRadius: 18,
+                padding: '14px 18px',
                 border: '1px solid #E2E8F0',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 8,
+                flexDirection: 'column',
+                gap: 12,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: '0.85rem', color: '#0F172A' }}>
-                <Filter size={16} />
-                <span>Ticket Feed ({filteredTickets.length})</span>
-              </div>
-
-              <div style={{ display: 'flex', gap: 6 }}>
-                {(['ALL', 'REPORTED', 'DISPATCHED', 'RESOLVED'] as const).map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => setStatusFilter(st)}
+              {/* Top Row: Title, Result Count & Status Tabs */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div
                     style={{
-                      padding: '4px 10px',
+                      width: 30,
+                      height: 30,
                       borderRadius: 8,
-                      border: 'none',
-                      background: statusFilter === st ? '#0288D1' : '#F1F5F9',
-                      color: statusFilter === st ? 'white' : '#475569',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
+                      background: '#E0F2FE',
+                      color: '#0288D1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
-                    {st}
+                    <Filter size={16} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 900, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>Incident Feed</span>
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          background: '#F1F5F9',
+                          color: '#475569',
+                          padding: '2px 8px',
+                          borderRadius: 10,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {filteredTickets.length} of {tickets.length}
+                      </span>
+                    </h3>
+                  </div>
+                </div>
+
+                {/* Status Tabs */}
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {[
+                    { key: 'ALL' as const, label: 'ALL', count: tickets.length },
+                    { key: 'REPORTED' as const, label: 'REPORTED', count: totalReported },
+                    { key: 'DISPATCHED' as const, label: 'DISPATCHED', count: totalDispatched },
+                    { key: 'RESOLVED' as const, label: 'RESOLVED', count: totalResolved },
+                    { key: 'CRITICAL' as const, label: '🔥 CRITICAL', count: criticalCount },
+                  ].map((st) => (
+                    <button
+                      key={st.key}
+                      type="button"
+                      onClick={() => setTicketStatusFilter(st.key)}
+                      style={{
+                        padding: '4px 9px',
+                        borderRadius: 8,
+                        border: 'none',
+                        background: ticketStatusFilter === st.key ? '#0288D1' : '#F1F5F9',
+                        color: ticketStatusFilter === st.key ? 'white' : '#475569',
+                        fontSize: '0.7rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <span>{st.label}</span>
+                      {st.count !== undefined && (
+                        <span
+                          style={{
+                            fontSize: '0.62rem',
+                            padding: '1px 5px',
+                            borderRadius: 10,
+                            background: ticketStatusFilter === st.key ? 'rgba(255,255,255,0.25)' : '#E2E8F0',
+                            color: ticketStatusFilter === st.key ? 'white' : '#64748B',
+                          }}
+                        >
+                          {st.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Search Bar Input */}
+              <div style={{ position: 'relative', width: '100%' }}>
+                <Search
+                  size={15}
+                  style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+                />
+                <input
+                  type="text"
+                  value={ticketSearchQuery}
+                  onChange={(e) => setTicketSearchQuery(e.target.value)}
+                  placeholder="Search by room (e.g. WASH-02), building, defect keyword, #tag..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 34px 8px 34px',
+                    borderRadius: 10,
+                    border: '1.5px solid #E2E8F0',
+                    fontSize: '0.8rem',
+                    background: '#F8FAFC',
+                    color: '#0F172A',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {ticketSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setTicketSearchQuery('')}
+                    style={{
+                      position: 'absolute',
+                      right: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: '#94A3B8',
+                      cursor: 'pointer',
+                      padding: 2,
+                    }}
+                  >
+                    <X size={14} />
                   </button>
-                ))}
+                )}
+              </div>
+
+              {/* Multi-Faceted Filters Row: Building, Floor, Category, Sort */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                {/* Building / Block Filter */}
+                <div>
+                  <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748B', display: 'block', marginBottom: 2 }}>
+                    BUILDING / BLOCK
+                  </label>
+                  <select
+                    value={ticketBuildingFilter}
+                    onChange={(e) => setTicketBuildingFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: 8,
+                      border: ticketBuildingFilter !== 'ALL' ? '1.5px solid #0288D1' : '1px solid #CBD5E1',
+                      background: ticketBuildingFilter !== 'ALL' ? '#F0F9FF' : 'white',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      color: ticketBuildingFilter !== 'ALL' ? '#0369A1' : '#0F172A',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="ALL">🏢 All Buildings / Blocks</option>
+                    {allCampusBuildingNames.map((bName) => (
+                      <option key={bName} value={bName}>
+                        {bName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Floor Filter */}
+                <div>
+                  <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748B', display: 'block', marginBottom: 2 }}>
+                    FLOOR LEVEL
+                  </label>
+                  <select
+                    value={ticketFloorFilter}
+                    onChange={(e) => setTicketFloorFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: 8,
+                      border: ticketFloorFilter !== 'ALL' ? '1.5px solid #0288D1' : '1px solid #CBD5E1',
+                      background: ticketFloorFilter !== 'ALL' ? '#F0F9FF' : 'white',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      color: ticketFloorFilter !== 'ALL' ? '#0369A1' : '#0F172A',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="ALL">🪜 All Floors (Campus-Wide)</option>
+                    {allCampusFloors.map((fl) => (
+                      <option key={fl} value={fl.toString()}>
+                        {fl === -1 ? 'Basement' : fl === 0 ? 'Ground Floor' : `Floor ${fl}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Defect Category Filter */}
+                <div>
+                  <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748B', display: 'block', marginBottom: 2 }}>
+                    DEFECT CATEGORY
+                  </label>
+                  <select
+                    value={ticketCategoryFilter}
+                    onChange={(e) => setTicketCategoryFilter(e.target.value as any)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: 8,
+                      border: ticketCategoryFilter !== 'ALL' ? '1.5px solid #0288D1' : '1px solid #CBD5E1',
+                      background: ticketCategoryFilter !== 'ALL' ? '#F0F9FF' : 'white',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      color: ticketCategoryFilter !== 'ALL' ? '#0369A1' : '#0F172A',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="ALL">🏷️ All Categories</option>
+                    <option value="WATER_SUPPLY">💧 Water Supply / Cooler</option>
+                    <option value="LIGHTS_FAN_PROJECTOR">💡 Lights / Fan / Projector</option>
+                    <option value="WASHROOM_CLEANLINESS">🧹 Washroom Cleanliness</option>
+                    <option value="FURNITURE_MAINTENANCE">🪑 Furniture / Maintenance</option>
+                  </select>
+                </div>
+
+                {/* Sort Order */}
+                <div>
+                  <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748B', display: 'block', marginBottom: 2 }}>
+                    SORT PRIORITY
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: 8,
+                      border: '1px solid #CBD5E1',
+                      background: 'white',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="SEVERITY_DESC">⚡ Highest AI Score First</option>
+                    <option value="DUPLICATES_DESC">👥 Most Clustered (+N)</option>
+                    <option value="NEWEST">🕒 Newest First</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Active Filter Pills Bar & Quick Sync Switch */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                  paddingTop: 8,
+                  borderTop: '1px dashed #E2E8F0',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {/* Quick Blueprint Sync Pill */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (ticketBuildingFilter === selectedMapBuilding && ticketFloorFilter === selectedFloor.toString()) {
+                        // Toggle back to campus-wide
+                        setTicketBuildingFilter('ALL');
+                        setTicketFloorFilter('ALL');
+                      } else {
+                        // Sync to map
+                        setTicketBuildingFilter(selectedMapBuilding);
+                        setTicketFloorFilter(selectedFloor.toString());
+                      }
+                    }}
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 800,
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                      border: '1px solid #CBD5E1',
+                      background:
+                        ticketBuildingFilter === selectedMapBuilding && ticketFloorFilter === selectedFloor.toString()
+                          ? '#0288D1'
+                          : '#F8FAFC',
+                      color:
+                        ticketBuildingFilter === selectedMapBuilding && ticketFloorFilter === selectedFloor.toString()
+                          ? 'white'
+                          : '#0F172A',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <MapPin size={12} />
+                    <span>
+                      {ticketBuildingFilter === selectedMapBuilding && ticketFloorFilter === selectedFloor.toString()
+                        ? `Locked to Map (${selectedMapBuilding} • Fl ${selectedFloor})`
+                        : `Filter to Map View (${selectedMapBuilding} • Fl ${selectedFloor})`}
+                    </span>
+                  </button>
+
+                  {/* Active Filter Badges */}
+                  {ticketBuildingFilter !== 'ALL' && (
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        background: '#E0F2FE',
+                        color: '#0369A1',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>🏢 {ticketBuildingFilter}</span>
+                      <X size={11} style={{ cursor: 'pointer' }} onClick={() => setTicketBuildingFilter('ALL')} />
+                    </span>
+                  )}
+
+                  {ticketFloorFilter !== 'ALL' && (
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        background: '#E0F2FE',
+                        color: '#0369A1',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>🪜 Floor {ticketFloorFilter}</span>
+                      <X size={11} style={{ cursor: 'pointer' }} onClick={() => setTicketFloorFilter('ALL')} />
+                    </span>
+                  )}
+
+                  {ticketCategoryFilter !== 'ALL' && (
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        background: '#E0F2FE',
+                        color: '#0369A1',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>🏷️ {CATEGORY_META[ticketCategoryFilter]?.label}</span>
+                      <X size={11} style={{ cursor: 'pointer' }} onClick={() => setTicketCategoryFilter('ALL')} />
+                    </span>
+                  )}
+
+                  {ticketStatusFilter !== 'ALL' && (
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        background: '#EDE9FE',
+                        color: '#6D28D9',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>⚡ {ticketStatusFilter}</span>
+                      <X size={11} style={{ cursor: 'pointer' }} onClick={() => setTicketStatusFilter('ALL')} />
+                    </span>
+                  )}
+
+                  {ticketSearchQuery && (
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        background: '#FEF3C7',
+                        color: '#92400E',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <span>🔍 "{ticketSearchQuery}"</span>
+                      <X size={11} style={{ cursor: 'pointer' }} onClick={() => setTicketSearchQuery('')} />
+                    </span>
+                  )}
+                </div>
+
+                {activeFiltersCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 800,
+                      background: 'none',
+                      border: 'none',
+                      color: '#EF4444',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 6px',
+                    }}
+                  >
+                    <RotateCcw size={11} />
+                    <span>Clear All Filters</span>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* List of Prioritized Tickets */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
               {filteredTickets.map((ticket) => {
                 const meta = CATEGORY_META[ticket.category];
                 const isSelected = selectedTicketId === ticket.ticket_id;
@@ -663,22 +1273,31 @@ export const AdminDashboardPage: React.FC = () => {
                       transition: 'all 0.2s',
                     }}
                   >
-                    {/* Top Row: Category, Urgency Score, Duplicates */}
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: '1.5rem' }}>{meta.icon}</span>
+                    {/* Top Row: Category, Spatial Location Badges, Urgency Score, Duplicates */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: '1.6rem', lineHeight: 1 }}>{meta.icon}</span>
                         <div>
-                          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0F172A' }}>
+                          <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#0F172A' }}>
                             {meta.label}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
-                            {ticket.location?.building_name} • Floor {ticket.location?.floor_number} • Rm {ticket.location?.room_number}
+                          {/* Location Badges (Omni-Channel Visibility across any block/floor) */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
+                            <span style={{ fontSize: '0.7rem', background: '#F1F5F9', color: '#1E293B', padding: '2px 7px', borderRadius: 6, fontWeight: 700 }}>
+                              🏢 {ticket.location?.building_name || 'Campus Building'}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', background: '#F1F5F9', color: '#1E293B', padding: '2px 7px', borderRadius: 6, fontWeight: 700 }}>
+                              🪜 Floor {ticket.location?.floor_number ?? 1}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', background: '#E0F2FE', color: '#0369A1', padding: '2px 7px', borderRadius: 6, fontWeight: 800 }}>
+                              🚪 Rm {ticket.location?.room_number || 'Zone'}
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       {/* AI Urgency Score & Duplicate Count Badge (§3) */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                         <span
                           style={{
                             fontSize: '0.78rem',
@@ -745,7 +1364,7 @@ export const AdminDashboardPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Actions Row: Dispatch to Maintenance OR Mark Resolved */}
+                    {/* Actions Row: Dispatch to Maintenance OR Mark Resolved + Locate on Map */}
                     <div
                       style={{
                         paddingTop: 10,
@@ -757,7 +1376,7 @@ export const AdminDashboardPage: React.FC = () => {
                         gap: 8,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span
                           style={{
                             fontSize: '0.72rem',
@@ -778,7 +1397,31 @@ export const AdminDashboardPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {/* Locate on Map Button: Instantly switches map view to this problem's building/floor */}
+                        <button
+                          type="button"
+                          onClick={() => handleLocateOnMap(ticket)}
+                          style={{
+                            background: '#F0F9FF',
+                            color: '#0288D1',
+                            border: '1px solid #BAE6FD',
+                            borderRadius: 8,
+                            padding: '6px 10px',
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            transition: 'all 0.15s ease',
+                          }}
+                          title="Switch blueprint view to this room"
+                        >
+                          <MapPin size={13} />
+                          <span>Locate on Map</span>
+                        </button>
+
                         {ticket.status === 'REPORTED' && (
                           <button
                             type="button"
@@ -788,7 +1431,7 @@ export const AdminDashboardPage: React.FC = () => {
                               const match = maintenanceStaff.find(
                                 (s) => s.specialization === meta.defaultStaffSpec
                               );
-                              setSelectedStaffId(match?.staff_id || maintenanceStaff[0].staff_id);
+                              setSelectedStaffId(match?.staff_id || maintenanceStaff[0]?.staff_id || '');
                             }}
                             style={{
                               background: '#0288D1',
@@ -843,6 +1486,62 @@ export const AdminDashboardPage: React.FC = () => {
                   </div>
                 );
               })}
+
+              {/* Empty State when no incidents match the filters */}
+              {filteredTickets.length === 0 && (
+                <div
+                  style={{
+                    background: 'white',
+                    borderRadius: 16,
+                    border: '2px dashed #CBD5E1',
+                    padding: '40px 20px',
+                    textAlign: 'center',
+                    color: '#64748B',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: '50%',
+                      background: '#F1F5F9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 12px',
+                      color: '#94A3B8',
+                    }}
+                  >
+                    <Filter size={22} />
+                  </div>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1E293B', margin: '0 0 6px' }}>
+                    No Incidents Match Selected Filters
+                  </h4>
+                  <p style={{ fontSize: '0.78rem', color: '#64748B', maxWidth: 360, margin: '0 auto 14px', lineHeight: 1.5 }}>
+                    No campus problems found matching your current search or filter criteria.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: 8,
+                      background: '#0288D1',
+                      color: 'white',
+                      border: 'none',
+                      fontSize: '0.76rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <RotateCcw size={12} />
+                    <span>Clear All Filters & Show Campus-Wide</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
