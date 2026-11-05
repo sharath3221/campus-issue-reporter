@@ -16,15 +16,34 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 const TICKETS_STORAGE_KEY = 'campuspulse_tickets_v1';
 const LOCATIONS_STORAGE_KEY = 'campuspulse_locations_v1';
 const STAFF_STORAGE_KEY = 'campuspulse_staff_v1';
+const DELETED_STAFF_STORAGE_KEY = 'campuspulse_deleted_staff_ids_v1';
+
+// Helpers to track permanently removed staff IDs across reloads and syncs
+function getDeletedStaffIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_STAFF_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch (e) {}
+  return new Set();
+}
+
+function saveDeletedStaffIds(ids: Set<string>): void {
+  try {
+    localStorage.setItem(DELETED_STAFF_STORAGE_KEY, JSON.stringify(Array.from(ids)));
+  } catch (e) {}
+}
 
 export function useIncidents() {
   // 1. Campus Locations State (Dynamic & Realtime)
   const [locations, setLocations] = useState<CampusLocation[]>(() => {
     try {
       const saved = localStorage.getItem(LOCATIONS_STORAGE_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.error('Failed reading locations from localStorage', e);
@@ -36,7 +55,7 @@ export function useIncidents() {
   const [tickets, setTickets] = useState<IncidentTicket[]>(() => {
     try {
       const saved = localStorage.getItem(TICKETS_STORAGE_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           // Filter out legacy demo mock tickets if present
@@ -58,11 +77,16 @@ export function useIncidents() {
   // 3. Maintenance Staff State (Dynamic, Realtime & Admin Managed)
   const [staffList, setStaffList] = useState<MaintenanceStaff[]>(() => {
     try {
+      const deletedIds = getDeletedStaffIds();
       const saved = localStorage.getItem(STAFF_STORAGE_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Explicitly return parsed array (even if empty []) and exclude deleted IDs
+          return parsed.filter((s: MaintenanceStaff) => !deletedIds.has(s.staff_id));
+        }
       }
+      return defaultStaff.filter((s) => !deletedIds.has(s.staff_id));
     } catch (e) {
       console.error('Failed reading staff from localStorage', e);
     }
@@ -182,8 +206,10 @@ export function useIncidents() {
           .select('*')
           .order('full_name', { ascending: true });
 
-        if (!error && data && data.length > 0 && isMounted) {
-          const mappedStaff: MaintenanceStaff[] = data.map((s: any) => ({
+        if (!error && Array.isArray(data) && isMounted) {
+          const deletedIds = getDeletedStaffIds();
+          const activeStaff = data.filter((s: any) => !deletedIds.has(s.staff_id));
+          const mappedStaff: MaintenanceStaff[] = activeStaff.map((s: any) => ({
             staff_id: s.staff_id,
             full_name: s.full_name,
             specialization: s.specialization,
@@ -289,8 +315,10 @@ export function useIncidents() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'maintenance_staff' },
         (payload) => {
+          const deletedIds = getDeletedStaffIds();
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const row = payload.new as MaintenanceStaff;
+            if (deletedIds.has(row.staff_id)) return; // Do not revive deleted staff!
             setStaffList((prev) => {
               const filtered = prev.filter((s) => s.staff_id !== row.staff_id);
               const updated = [...filtered, row];
@@ -300,6 +328,8 @@ export function useIncidents() {
           } else if (payload.eventType === 'DELETE') {
             const oldId = (payload.old as any)?.staff_id;
             if (oldId) {
+              deletedIds.add(oldId);
+              saveDeletedStaffIds(deletedIds);
               setStaffList((prev) => {
                 const updated = prev.filter((s) => s.staff_id !== oldId);
                 localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(updated));
@@ -872,6 +902,13 @@ export function useIncidents() {
         passcode: staffData.passcode?.trim() || '1234',
       };
 
+      // Clear tombstone if previously deleted
+      const deletedIds = getDeletedStaffIds();
+      if (newStaff.staff_id && deletedIds.has(newStaff.staff_id)) {
+        deletedIds.delete(newStaff.staff_id);
+        saveDeletedStaffIds(deletedIds);
+      }
+
       // 1. Update local reactive state
       setStaffList((prev) => {
         const filtered = prev.filter((s) => s.staff_id !== newStaff.staff_id);
@@ -953,6 +990,12 @@ export function useIncidents() {
   // Delete / Remove a maintenance staff member
   const deleteMaintenanceStaff = useCallback(
     async (staffId: string): Promise<boolean> => {
+      // 1. Record in tombstone storage so it is never revived
+      const deletedIds = getDeletedStaffIds();
+      deletedIds.add(staffId);
+      saveDeletedStaffIds(deletedIds);
+
+      // 2. Update local state
       setStaffList((prev) => {
         const updated = prev.filter((s) => s.staff_id !== staffId);
         try {
@@ -961,9 +1004,19 @@ export function useIncidents() {
         return updated;
       });
 
+      // 3. Sync deletion to Supabase
       if (isSupabaseConfigured && supabase) {
         try {
-          await supabase.from('maintenance_staff').delete().eq('staff_id', staffId);
+          // Unassign from tickets first to prevent foreign key errors
+          await supabase
+            .from('incident_tickets')
+            .update({ assigned_staff_id: null })
+            .eq('assigned_staff_id', staffId);
+
+          const { error } = await supabase.from('maintenance_staff').delete().eq('staff_id', staffId);
+          if (error) {
+            console.warn('Supabase delete staff notice:', error);
+          }
         } catch (e) {
           console.warn('Error deleting staff from Supabase', e);
         }

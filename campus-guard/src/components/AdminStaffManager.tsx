@@ -898,6 +898,45 @@ export const AdminStaffManager: React.FC<AdminStaffManagerProps> = ({
           );
         })}
       </div>
+
+      {/* Empty State when no technicians match filter or all have been removed */}
+      {filteredStaff.length === 0 && (
+        <div
+          style={{
+            background: 'white',
+            borderRadius: 16,
+            border: '2px dashed #CBD5E1',
+            padding: '48px 24px',
+            textAlign: 'center',
+            color: '#64748B',
+            marginTop: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              background: '#F1F5F9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              color: '#94A3B8',
+            }}
+          >
+            <UserPlus size={28} />
+          </div>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1E293B', marginBottom: 6 }}>
+            {maintenanceStaff.length === 0 ? 'No Maintenance Staff Registered' : 'No Technicians Match Filter'}
+          </h3>
+          <p style={{ fontSize: '0.82rem', color: '#64748B', maxWidth: 440, margin: '0 auto', lineHeight: 1.5 }}>
+            {maintenanceStaff.length === 0
+              ? 'All technician roster cards have been removed. Use the form above to register an authorized technician for WhatsApp dispatch and field login.'
+              : 'Try clearing your search query or trade filter to see registered technicians.'}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
