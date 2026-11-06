@@ -36,6 +36,23 @@ function saveDeletedStaffIds(ids: Set<string>): void {
   } catch (e) {}
 }
 
+// Helpers for RFC 4122 v4 UUID compatibility with PostgreSQL UUID primary keys
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function isValidUUID(str?: string): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
 export function useIncidents() {
   // 1. Campus Locations State (Dynamic & Realtime)
   const [locations, setLocations] = useState<CampusLocation[]>(() => {
@@ -198,7 +215,7 @@ export function useIncidents() {
     fetchSupabaseLocations();
     fetchSupabaseTickets();
 
-    // 3. Fetch live staff from Supabase
+    // 3. Fetch live staff from Supabase with safe local-merge preservation
     async function fetchSupabaseStaff() {
       try {
         const { data, error } = await supabase!
@@ -208,8 +225,8 @@ export function useIncidents() {
 
         if (!error && Array.isArray(data) && isMounted) {
           const deletedIds = getDeletedStaffIds();
-          const activeStaff = data.filter((s: any) => !deletedIds.has(s.staff_id));
-          const mappedStaff: MaintenanceStaff[] = activeStaff.map((s: any) => ({
+          const activeRemoteStaff = data.filter((s: any) => !deletedIds.has(s.staff_id));
+          const remoteMapped: MaintenanceStaff[] = activeRemoteStaff.map((s: any) => ({
             staff_id: s.staff_id,
             full_name: s.full_name,
             specialization: s.specialization,
@@ -217,8 +234,40 @@ export function useIncidents() {
             is_on_duty: s.is_on_duty,
             passcode: s.passcode || '1234',
           }));
-          setStaffList(mappedStaff);
-          localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(mappedStaff));
+
+          // Read existing local storage staff to avoid wiping out locally added staff
+          let currentLocal: MaintenanceStaff[] = [];
+          try {
+            const raw = localStorage.getItem(STAFF_STORAGE_KEY);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                currentLocal = parsed.filter(
+                  (s: MaintenanceStaff) => s && s.staff_id && !deletedIds.has(s.staff_id)
+                );
+              }
+            }
+          } catch (e) {}
+
+          // Merge: Remote staff takes precedence for existing remote IDs,
+          // but locally created staff not yet in remote are PRESERVED!
+          const mergedMap = new Map<string, MaintenanceStaff>();
+
+          // 1. Add all valid remote staff
+          for (const s of remoteMapped) {
+            mergedMap.set(s.staff_id, s);
+          }
+
+          // 2. Preserve any local staff that haven't been deleted
+          for (const s of currentLocal) {
+            if (!mergedMap.has(s.staff_id)) {
+              mergedMap.set(s.staff_id, s);
+            }
+          }
+
+          const finalStaff = Array.from(mergedMap.values());
+          setStaffList(finalStaff);
+          localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(finalStaff));
         }
       } catch (err) {
         console.warn('Notice: Error fetching staff from Supabase:', err);
@@ -893,8 +942,14 @@ export function useIncidents() {
     async (
       staffData: Omit<MaintenanceStaff, 'staff_id'> & { staff_id?: string; passcode?: string }
     ): Promise<boolean> => {
+      // Ensure staff_id is a valid UUID so PostgreSQL UUID primary key doesn't reject it
+      const staffId =
+        staffData.staff_id && isValidUUID(staffData.staff_id)
+          ? staffData.staff_id
+          : generateUUID();
+
       const newStaff: MaintenanceStaff = {
-        staff_id: staffData.staff_id || `staff-${Date.now().toString().slice(-6)}`,
+        staff_id: staffId,
         full_name: staffData.full_name.trim(),
         specialization: staffData.specialization,
         phone_number: staffData.phone_number.trim(),
@@ -909,7 +964,7 @@ export function useIncidents() {
         saveDeletedStaffIds(deletedIds);
       }
 
-      // 1. Update local reactive state
+      // 1. Update local reactive state & localStorage immediately
       setStaffList((prev) => {
         const filtered = prev.filter((s) => s.staff_id !== newStaff.staff_id);
         const updated = [...filtered, newStaff];
@@ -919,37 +974,24 @@ export function useIncidents() {
         return updated;
       });
 
-      // 2. Persist to Supabase database
+      // 2. Persist to Supabase database (matching columns in production table)
       if (isSupabaseConfigured && supabase) {
         try {
-          const { error } = await supabase.from('maintenance_staff').upsert(
-            {
-              staff_id: newStaff.staff_id,
-              full_name: newStaff.full_name,
-              specialization: newStaff.specialization,
-              phone_number: newStaff.phone_number,
-              is_on_duty: newStaff.is_on_duty,
-              passcode: newStaff.passcode,
-            },
-            { onConflict: 'staff_id' }
-          );
+          const payload: Record<string, any> = {
+            staff_id: newStaff.staff_id,
+            full_name: newStaff.full_name,
+            specialization: newStaff.specialization,
+            phone_number: newStaff.phone_number,
+            is_on_duty: newStaff.is_on_duty,
+          };
 
+          const { error } = await supabase.from('maintenance_staff').upsert(payload, { onConflict: 'staff_id' });
           if (error) {
-            console.warn('Supabase staff upsert notice:', error);
-            // Fallback without passcode column if not migrated
-            if (error.message?.includes('passcode')) {
-              await supabase.from('maintenance_staff').upsert({
-                staff_id: newStaff.staff_id,
-                full_name: newStaff.full_name,
-                specialization: newStaff.specialization,
-                phone_number: newStaff.phone_number,
-                is_on_duty: newStaff.is_on_duty,
-              });
-            }
+            console.warn('Supabase staff upsert notice (persisted locally):', error.message || error);
           }
           return true;
         } catch (err) {
-          console.warn('Supabase staff error:', err);
+          console.warn('Supabase staff error (persisted locally):', err);
           return true;
         }
       }
