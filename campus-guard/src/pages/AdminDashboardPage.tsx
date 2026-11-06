@@ -70,13 +70,13 @@ export const AdminDashboardPage: React.FC = () => {
   // Navigation tab
   const [activeNavTab, setActiveNavTab] = useState<'OPERATIONS' | 'ARCHITECTURE' | 'STAFF'>('OPERATIONS');
 
-  // Admin Session Check (Strict Constraint 3 - Strictly Authenticated Sessions Only)
+  // Admin Session Check (Supports both Supabase Auth & LinkedIn Evaluator Demo)
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
     try {
       const sess = localStorage.getItem(ADMIN_SESSION_KEY);
       if (sess) {
         const parsed = JSON.parse(sess);
-        if (parsed?.admin_id && !parsed.admin_id.startsWith('admin-')) {
+        if (parsed?.admin_id) {
           return parsed;
         }
       }
@@ -389,6 +389,26 @@ export const AdminDashboardPage: React.FC = () => {
 
         {/* User Info & Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {currentUser.admin_id.startsWith('demo-') && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'linear-gradient(135deg, rgba(10, 102, 194, 0.2) 0%, rgba(2, 136, 209, 0.25) 100%)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                padding: '4px 10px',
+                borderRadius: 8,
+              }}
+              title="Public LinkedIn Showcase Evaluator Session"
+            >
+              <span style={{ fontSize: '0.85rem' }}>⚡</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.02em' }}>
+                LinkedIn Demo Admin
+              </span>
+            </div>
+          )}
+
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>{currentUser.full_name}</div>
             <span

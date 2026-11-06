@@ -18,6 +18,7 @@ export const App: React.FC = () => {
       <Route path="/floor-report" element={<FloorReportPage />} />
 
       {/* Route 3: Separate Secure Admin Portal strictly for Principal & Management */}
+      <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
 

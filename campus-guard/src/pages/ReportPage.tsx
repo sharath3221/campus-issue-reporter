@@ -372,20 +372,21 @@ export const ReportPage: React.FC = () => {
         <button
           onClick={() => navigate('/admin/login')}
           style={{
-            background: '#F1F5F9',
-            border: '1px solid #CBD5E1',
+            background: 'linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%)',
+            border: '1px solid #BFDBFE',
             borderRadius: 20,
             padding: '5px 12px',
             fontSize: '0.75rem',
             fontWeight: 700,
-            color: '#475569',
+            color: '#1D4ED8',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: 5,
           }}
+          title="Try Principal & Admin Command Center Demo"
         >
-          <span>Admin Portal</span>
+          <span>Admin Portal ⚡ Demo</span>
           <ChevronRight size={14} />
         </button>
       </header>

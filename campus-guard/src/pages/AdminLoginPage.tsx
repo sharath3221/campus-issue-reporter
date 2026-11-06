@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, UserPlus, LogIn } from 'lucide-react';
+import { Shield, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, UserPlus, LogIn, Zap, Sparkles } from 'lucide-react';
 import { AdminRole, AdminUser } from '../types';
 import {
   signInWithGoogleSupabase,
   signInWithSupabasePassword,
   signUpWithSupabase,
   getActiveAdminSession,
+  signInAsDemoAdmin,
 } from '../lib/supabaseAuth';
 
 export const AdminLoginPage: React.FC = () => {
@@ -19,6 +20,22 @@ export const AdminLoginPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 1-Click Launch for LinkedIn & Public Evaluators
+  const handleDemoLogin = (demoRole: AdminRole = 'PRINCIPAL') => {
+    signInAsDemoAdmin(demoRole);
+    navigate('/admin/dashboard');
+  };
+
+  // Auto-Fill sample credentials into form
+  const handleAutoFillDemo = () => {
+    setEmail('demo.principal@campuspulse.edu');
+    setPassword('DemoAdmin123!');
+    setRole('PRINCIPAL');
+    setMode('SIGN_IN');
+    setError('');
+    setSuccessMsg('Sample demo credentials loaded! Click "Authorize & Access" below or use the 1-click button.');
+  };
 
   // Check if session already exists or returning from Supabase OAuth
   useEffect(() => {
@@ -162,6 +179,118 @@ export const AdminLoginPage: React.FC = () => {
           <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: 4 }}>
             Authenticated Principal & Management Command Center (Constraint 3)
           </p>
+        </div>
+
+        {/* LinkedIn Evaluator & Public Demo Quick Access */}
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #0A66C2 0%, #004182 100%)',
+            borderRadius: 16,
+            padding: '16px',
+            marginBottom: 20,
+            color: 'white',
+            boxShadow: '0 8px 24px -6px rgba(10, 102, 194, 0.45)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Zap size={16} color="#FDE047" fill="#FDE047" />
+              <span style={{ fontWeight: 800, fontSize: '0.88rem', letterSpacing: '-0.01em' }}>
+                LinkedIn Showcase Demo Admin
+              </span>
+            </div>
+            <span
+              style={{
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                background: 'rgba(255, 255, 255, 0.22)',
+                padding: '2px 8px',
+                borderRadius: 20,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              1-Click Try
+            </span>
+          </div>
+
+          <p style={{ fontSize: '0.74rem', opacity: 0.92, lineHeight: 1.45, margin: '0 0 12px 0' }}>
+            Visiting from LinkedIn? Experience the full Executive Command Center with spatial floor maps, AI triage, and real-time dispatch with zero signup.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => handleDemoLogin('PRINCIPAL')}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: 'none',
+              background: '#FFFFFF',
+              color: '#0A66C2',
+              fontWeight: 800,
+              fontSize: '0.84rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+              transition: 'transform 0.15s ease',
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
+            onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+          >
+            <span>🚀 1-Click Launch as College Principal</span>
+            <ArrowRight size={15} />
+          </button>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: 10,
+              paddingTop: 8,
+              borderTop: '1px solid rgba(255, 255, 255, 0.15)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('MANAGEMENT')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.88)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              🏛️ Or Launch as Governing Trustee
+            </button>
+
+            <button
+              type="button"
+              onClick={handleAutoFillDemo}
+              title="Auto-fills demo email and password"
+              style={{
+                background: 'rgba(255, 255, 255, 0.15)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                color: '#FFFFFF',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: '3px 8px',
+                borderRadius: 6,
+              }}
+            >
+              Fill Credentials ✍️
+            </button>
+          </div>
         </div>
 
         {/* Mode Switcher Tabs */}
